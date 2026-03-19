@@ -13,6 +13,14 @@ interface GroupedByOrder {
   items: OrderItemType[];
 }
 
+function normalizeList<T>(payload: any): T[] {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.results)) return payload.results;
+  return [];
+}
+
 const ServingDisplay: React.FC = () => {
   const [items, setItems] = useState<OrderItemType[]>([]);
   const [loading, setLoading] = useState(true);
@@ -21,7 +29,7 @@ const ServingDisplay: React.FC = () => {
     setLoading(true);
     try {
       const res = await orderAPI.getServingItems();
-      setItems(res.data || []);
+      setItems(normalizeList<OrderItemType>(res.data));
     } catch {
       setItems([]);
     } finally {

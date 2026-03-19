@@ -21,6 +21,14 @@ function formatWaitingTime(createdAt?: string): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+function normalizeList<T>(payload: any): T[] {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.results)) return payload.results;
+  return [];
+}
+
 const KitchenDisplay: React.FC = () => {
   const [part, setPart] = useState('면파트');
   const [items, setItems] = useState<OrderItemType[]>([]);
@@ -30,7 +38,7 @@ const KitchenDisplay: React.FC = () => {
     setLoading(true);
     try {
       const res = await orderAPI.getByPart(part);
-      setItems(res.data || []);
+      setItems(normalizeList<OrderItemType>(res.data));
     } catch {
       setItems([]);
     } finally {

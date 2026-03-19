@@ -26,6 +26,14 @@ interface PayrollData {
   this_month_work_days?: number; // 이번달 출근일수
 }
 
+function normalizeList<T>(payload: any): T[] {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.results)) return payload.results;
+  return [];
+}
+
 const PayrollList: React.FC = () => {
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth <= 768;
@@ -69,12 +77,12 @@ const PayrollList: React.FC = () => {
       console.log('직원 API 원본 응답:', employeeRes);
       console.log('직원 API 데이터:', employeeRes.data);
 
-      const payrollsData = payrollRes.data || [];
-      const allEmployeesData = employeeRes.data || [];
+      const payrollsData = normalizeList<any>(payrollRes.data);
+      const allEmployeesData = normalizeList<Employee>(employeeRes.data);
       // 재직 직원만 필터링
       const employeesData = allEmployeesData.filter((e: Employee) => e.status === '재직');
-      const attendancesData = attendanceRes.data || [];
-      const schedulesData = scheduleRes.data || [];
+      const attendancesData = normalizeList<Attendance>(attendanceRes.data);
+      const schedulesData = normalizeList<Schedule>(scheduleRes.data);
 
       console.log('급여 데이터 로드:', {
         payrollsCount: payrollsData.length,

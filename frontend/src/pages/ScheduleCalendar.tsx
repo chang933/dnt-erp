@@ -3,6 +3,14 @@ import { scheduleAPI, employeeAPI } from '../api/client';
 import { Schedule } from '../types';
 import { useWindowWidth } from '../hooks/useWindowWidth';
 
+function normalizeList<T>(payload: any): T[] {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.results)) return payload.results;
+  return [];
+}
+
 const ScheduleCalendar: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [schedules, setSchedules] = useState<Schedule[]>([]);
@@ -29,8 +37,8 @@ const ScheduleCalendar: React.FC = () => {
         employeeAPI.getAll({ limit: 100 }),
       ]);
       console.log('스케줄 데이터 로딩 완료');
-      setSchedules(scheduleRes.data || []);
-      setEmployees(employeeRes.data || []);
+      setSchedules(normalizeList<Schedule>(scheduleRes.data));
+      setEmployees(normalizeList<any>(employeeRes.data));
     } catch (err: any) {
       console.error('데이터 로딩 실패:', err);
       console.error('에러 상세:', err.response?.data || err.message);

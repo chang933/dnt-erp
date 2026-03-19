@@ -2,6 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { customerAPI } from '../api/client';
 import { Customer } from '../types';
 
+function normalizeList<T>(payload: any): T[] {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.results)) return payload.results;
+  return [];
+}
+
 const CustomerList: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -21,9 +29,10 @@ const CustomerList: React.FC = () => {
     try {
       setLoading(true);
       const response = await customerAPI.getAll({ limit: 100 });
-      setCustomers(response.data);
+      setCustomers(normalizeList<Customer>(response.data));
     } catch (err) {
       console.error('데이터 로딩 실패:', err);
+      setCustomers([]);
     } finally {
       setLoading(false);
     }

@@ -133,6 +133,14 @@ const REVENUE_LABELS: Record<RevenueExpenseType, string> = {
   '관리비': '관리비',
 };
 
+function normalizeList<T>(payload: any): T[] {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.results)) return payload.results;
+  return [];
+}
+
 const ProfitCalculator: React.FC = () => {
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth <= 768;
@@ -217,7 +225,7 @@ const ProfitCalculator: React.FC = () => {
         end_date: endDate,
         limit: 500,
       });
-      const list: RevenueExpense[] = listRes.data || [];
+      const list: RevenueExpense[] = normalizeList<RevenueExpense>(listRes.data);
 
       let totalRevenue = 0;
       let totalExpense = 0;

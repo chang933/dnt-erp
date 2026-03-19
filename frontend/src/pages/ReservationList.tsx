@@ -19,6 +19,14 @@ function getWeekday(dateStr: string): string {
   return WEEKDAY_FULL[d.getDay()];
 }
 
+function normalizeList<T>(payload: any): T[] {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.results)) return payload.results;
+  return [];
+}
+
 const EMPTY_FORM: ReservationCreate = {
   reservation_date: new Date().toISOString().split('T')[0],
   reservation_time: '',
@@ -47,7 +55,7 @@ const ReservationList: React.FC = () => {
     try {
       setLoading(true);
       const response = await reservationAPI.getAll({ limit: 1000 });
-      setReservations(response.data || []);
+      setReservations(normalizeList<Reservation>(response.data));
     } catch (err) {
       console.error('예약 목록 로딩 실패:', err);
       setReservations([]);

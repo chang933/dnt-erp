@@ -3,6 +3,14 @@ import { employeeAPI, scheduleAPI } from '../api/client';
 import { Employee } from '../types';
 import { useWindowWidth } from '../hooks/useWindowWidth';
 
+function normalizeList<T>(payload: any): T[] {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.results)) return payload.results;
+  return [];
+}
+
 const WeeklySchedule: React.FC = () => {
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth <= 768;
@@ -30,7 +38,7 @@ const WeeklySchedule: React.FC = () => {
     try {
       setLoading(true);
       const response = await employeeAPI.getAll({ status: '재직' });
-      const employeeList = response.data || [];
+      const employeeList = normalizeList<Employee>(response.data);
       setEmployees(employeeList);
       const initialSelections: Record<number, Set<string>> = {};
       employeeList.forEach((emp: Employee) => {
@@ -68,7 +76,7 @@ const WeeklySchedule: React.FC = () => {
             start_date: startDate,
             end_date: endDate,
           });
-          const schedules = response.data || [];
+          const schedules = normalizeList<any>(response.data);
 
           const holidayDates = new Set<string>();
           const empExtra: Record<string, number> = {};

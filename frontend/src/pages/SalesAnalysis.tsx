@@ -34,6 +34,14 @@ const formatCurrency = (val: number) =>
     ? `${(val / 10000).toFixed(1)}만`
     : val.toLocaleString();
 
+function normalizeList<T>(payload: any): T[] {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.results)) return payload.results;
+  return [];
+}
+
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
   return (
@@ -73,7 +81,7 @@ export default function SalesAnalysis() {
       const lastDay = new Date(year, month, 0).getDate();
       const endDate = `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
       const res = await revenueExpenseAPI.getAll({ start_date: startDate, end_date: endDate, limit: 500 });
-      setRawData(res.data || []);
+      setRawData(normalizeList<any>(res.data));
     } catch (e) {
       console.error(e);
     } finally {

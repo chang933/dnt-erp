@@ -24,6 +24,14 @@ function formatCurrency(n: number): string {
   return new Intl.NumberFormat('ko-KR').format(n);
 }
 
+function normalizeList<T>(payload: any): T[] {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.results)) return payload.results;
+  return [];
+}
+
 const EMPTY_FORM: FoodCostCreate = {
   date: new Date().toISOString().split('T')[0],
   supplier: 'G월드',
@@ -58,7 +66,7 @@ const IngredientList: React.FC = () => {
       const lastDay = new Date(year, month + 1, 0).getDate();
       const endDate = toDateStr(year, month, lastDay);
       const res = await foodCostAPI.getAll({ start_date: startDate, end_date: endDate, limit: 2000 });
-      setRecords(res.data || []);
+      setRecords(normalizeList<FoodCost>(res.data));
     } catch (err) {
       console.error('식자재 데이터 로딩 실패:', err);
       setRecords([]);

@@ -19,6 +19,14 @@ const getFullImageUrl = (fileUrl: string): string => {
   return `${API_BASE_URL}${fileUrl.startsWith('/') ? fileUrl : `/${fileUrl}`}`;
 };
 
+function normalizeList<T>(payload: any): T[] {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.results)) return payload.results;
+  return [];
+}
+
 const DocumentList: React.FC = () => {
   const [documents, setDocuments] = useState<any[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -48,8 +56,8 @@ const DocumentList: React.FC = () => {
         documentAPI.getAll(params),
         employeeAPI.getAll({ limit: 100 }),
       ]);
-      setDocuments(documentRes.data || []);
-      setEmployees(employeeRes.data || []);
+      setDocuments(normalizeList<any>(documentRes.data));
+      setEmployees(normalizeList<Employee>(employeeRes.data));
     } catch (err) {
       console.error('데이터 로딩 실패:', err);
       setDocuments([]);

@@ -8,6 +8,14 @@ const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:800
 
 type EmploymentFilter = 'ALL' | 'FULL_TIME' | 'PART_TIME' | 'DAILY';
 
+function normalizeEmployeeList(payload: any): Employee[] {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.results)) return payload.results;
+  return [];
+}
+
 const EmployeeList: React.FC = () => {
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth <= 768;
@@ -73,7 +81,7 @@ const EmployeeList: React.FC = () => {
       console.log('직원 목록 불러오기 시작...');
       const response = await employeeAPI.getAll({ limit: 100 });
       console.log('직원 목록 응답:', response.data);
-      setEmployees(response.data || []);
+      setEmployees(normalizeEmployeeList(response.data));
     } catch (err: any) {
       console.error('직원 목록 로딩 에러:', err);
       console.error('에러 상세:', err.response?.data || err.message);

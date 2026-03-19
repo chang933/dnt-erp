@@ -5,6 +5,14 @@ import { Employee, EmployeeCreate, Document } from '../types';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8001';
 
+function normalizeList<T>(payload: any): T[] {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.results)) return payload.results;
+  return [];
+}
+
 const EmployeeDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -75,7 +83,7 @@ const EmployeeDetail: React.FC = () => {
   const fetchDocuments = async (employeeId: number) => {
     try {
       const response = await documentAPI.getByEmployee(employeeId);
-      setDocuments(response.data || []);
+      setDocuments(normalizeList<Document>(response.data));
     } catch (err) {
       console.error('서류 정보 로딩 에러:', err);
     }

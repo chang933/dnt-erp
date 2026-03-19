@@ -3,6 +3,14 @@ import { attendanceAPI, employeeAPI, scheduleAPI } from '../api/client';
 import { Attendance, Employee, Schedule } from '../types';
 import { useWindowWidth } from '../hooks/useWindowWidth';
 
+function normalizeList<T>(payload: any): T[] {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.results)) return payload.results;
+  return [];
+}
+
 const AttendanceList: React.FC = () => {
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth <= 768;
@@ -33,9 +41,9 @@ const AttendanceList: React.FC = () => {
         scheduleAPI.getAll({ start_date: selectedDate, end_date: selectedDate }),
         employeeAPI.getAll({ status: '재직', limit: 100 }),
       ]);
-      setAttendances(attendanceRes.data || []);
-      setSchedules(scheduleRes.data || []);
-      setEmployees(employeeRes.data || []);
+      setAttendances(normalizeList<Attendance>(attendanceRes.data));
+      setSchedules(normalizeList<Schedule>(scheduleRes.data));
+      setEmployees(normalizeList<Employee>(employeeRes.data));
     } catch (err: any) {
       console.error('데이터 로딩 실패:', err);
       setAttendances([]);

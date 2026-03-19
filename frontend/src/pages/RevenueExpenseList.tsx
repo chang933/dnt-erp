@@ -56,6 +56,14 @@ const REVENUE_LABELS: Record<string, string> = {
   '관리비': '관리비',
 };
 
+function normalizeList<T>(payload: any): T[] {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.results)) return payload.results;
+  return [];
+}
+
 const RevenueExpenseList: React.FC = () => {
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth <= 768;
@@ -116,7 +124,7 @@ const RevenueExpenseList: React.FC = () => {
       const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
       
       const listRes = await revenueExpenseAPI.getAll({ start_date: startDate, end_date: endDate });
-      setMonthlyExpenses(listRes.data || []);
+      setMonthlyExpenses(normalizeList<RevenueExpense>(listRes.data));
     } catch (err: any) {
       console.error('월별 데이터 로딩 실패:', err);
       setMonthlyExpenses([]);
@@ -205,7 +213,8 @@ const RevenueExpenseList: React.FC = () => {
     try {
       setLoading(true);
       const listRes = await revenueExpenseAPI.getAll({ start_date: selectedDate, end_date: selectedDate });
-      setRevenueExpenses(listRes.data || []);
+      const listData = normalizeList<RevenueExpense>(listRes.data);
+      setRevenueExpenses(listData);
 
       // 입력값 초기화 (매출: 홀매출·배달매출만, 배달은 카테고리별)
       const revenueKeys: Record<string, string> = {};
@@ -217,7 +226,7 @@ const RevenueExpenseList: React.FC = () => {
       deliveryCategories.forEach(cat => {
         revenueKeys[`배달매출_${cat}`] = '';
       });
-      (listRes.data || []).forEach((item: RevenueExpense) => {
+      listData.forEach((item: RevenueExpense) => {
         if (item.type === '홀매출_주간' || item.type === '홀매출_야간') {
           if (item.memo === '식권대장') {
             const cur = Number(revenueKeys['홀매출_식권대장'] || 0) || 0;
@@ -240,7 +249,7 @@ const RevenueExpenseList: React.FC = () => {
       deliveryCategories.forEach(cat => {
         depositKeys[`배달매출_${cat}`] = '';
       });
-      (listRes.data || []).forEach((item: RevenueExpense) => {
+      listData.forEach((item: RevenueExpense) => {
         if (item.type === '홀매출_실입금') {
           const cur = Number(depositKeys['홀매출'] || 0) || 0;
           depositKeys['홀매출'] = String(cur + Number(item.amount));
@@ -277,8 +286,8 @@ const RevenueExpenseList: React.FC = () => {
           payrollAPI.getByMonth(yearMonth).catch(() => ({ data: [] })),
           employeeAPI.getAll({ limit: 200 }).catch(() => ({ data: [] })),
         ]);
-        const payrolls = payrollRes.data || [];
-        const employees = (employeeRes.data || []).filter((e: Employee) => e.status === '재직');
+        const payrolls = normalizeList<any>(payrollRes.data);
+        const employees = normalizeList<Employee>(employeeRes.data).filter((e: Employee) => e.status === '재직');
         const employeeMap = new Map<number, Employee>();
         employees.forEach((emp: Employee) => employeeMap.set(emp.id, emp));
 
@@ -311,7 +320,7 @@ const RevenueExpenseList: React.FC = () => {
         const prevRes = await revenueExpenseAPI.getAll({ start_date: prevStart, end_date: prevEnd });
         let hallRev = 0;
         let deliveryRev = 0;
-        (prevRes.data || []).forEach((item: RevenueExpense) => {
+        normalizeList<RevenueExpense>(prevRes.data).forEach((item: RevenueExpense) => {
           if (item.type === '홀매출_주간' || item.type === '홀매출_야간') {
             if ((item.memo || '') !== '식권대장') hallRev += Number(item.amount);
           }
@@ -333,7 +342,7 @@ const RevenueExpenseList: React.FC = () => {
         const cumRev: Record<string, number> = {};
         const cumDep: Record<string, number> = {};
         const cumExp: Record<string, number> = {};
-        (cumRes.data || []).forEach((item: RevenueExpense) => {
+        normalizeList<RevenueExpense>(cumRes.data).forEach((item: RevenueExpense) => {
           // 매출
           if (item.type === '홀매출_주간' || item.type === '홀매출_야간') {
             if (item.memo === '식권대장') {
