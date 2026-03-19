@@ -15,18 +15,32 @@ from app.models import (
     Order, OrderItem, Reservation, FoodCost,
 )
 
-# 개발용 허용 origin 목록 (로컬 + 같은 네트워크 모바일/태블릿 접속 허용)
-CORS_ORIGINS = [
+# 기본 허용 origin 목록 (로컬 + 운영 프론트)
+BASE_CORS_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://192.168.219.101:3000",
+    "https://dnt-erp.vercel.app",
 ]
+
+# 환경변수로 추가 허용 origin 지정 가능 (쉼표 구분)
+extra_origins = os.getenv("CORS_ORIGINS", "")
+CORS_ORIGINS = BASE_CORS_ORIGINS + [o.strip() for o in extra_origins.split(",") if o.strip()]
+
+
+def _is_allowed_origin(origin: str | None) -> bool:
+    if not origin:
+        return False
+    # Vercel preview 도메인 허용
+    if origin.startswith("https://") and origin.endswith(".vercel.app"):
+        return True
+    return origin in CORS_ORIGINS
 
 
 def _cors_headers(request: StarletteRequest):
     """요청 origin에 맞춰 CORS 헤더 dict 반환"""
     origin = request.headers.get("origin")
-    allow_origin = origin if origin and origin in CORS_ORIGINS else CORS_ORIGINS[0]
+    allow_origin = origin if _is_allowed_origin(origin) else CORS_ORIGINS[0]
     return {
         "Access-Control-Allow-Origin": allow_origin,
         "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
@@ -59,6 +73,7 @@ app.add_middleware(GZipMiddleware, minimum_size=500)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
+    allow_origin_regex=r"^https://.*\.vercel\.app$",
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
