@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { revenueExpenseAPI, payrollAPI, employeeAPI } from '../api/client';
+import { revenueExpenseAPI, payrollAPI, employeeAPI, apiClient } from '../api/client';
 import { RevenueExpense, RevenueExpenseCreate, RevenueExpenseType } from '../types';
 import type { Employee } from '../types';
 import { useWindowWidth } from '../hooks/useWindowWidth';
@@ -14,6 +14,24 @@ const EXPENSE_TYPES: RevenueExpenseType[] = [
 
 // 당일 매출/지출 추가 품목 저장 (순익계산기와 공유)
 const SHARED_CUSTOM_EXPENSE_ITEMS_KEY = 'shared-custom-expense-items';
+const SETTINGS_KEY_CUSTOM_EXPENSE_ITEMS = 'shared-custom-expense-items';
+
+async function fetchSetting<T>(key: string): Promise<T | null> {
+  try {
+    const res = await apiClient.get(`/settings/${key}`);
+    return res.data?.value ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function saveSetting(key: string, value: any): Promise<void> {
+  try {
+    await apiClient.put(`/settings/${key}`, { value });
+  } catch {
+    // 설정 저장 실패 시 로컬 저장만 유지
+  }
+}
 
 function loadSharedCustomExpenseItems(): string[] {
   try {
@@ -32,6 +50,14 @@ function saveSharedCustomExpenseItems(items: string[]) {
   try {
     localStorage.setItem(SHARED_CUSTOM_EXPENSE_ITEMS_KEY, JSON.stringify(items));
   } catch (_) {}
+}
+
+function normalizeCustomExpenseItems(payload: unknown): string[] {
+  if (!Array.isArray(payload)) return [];
+  return payload
+    .filter((x): x is string => typeof x === 'string')
+    .map((x) => x.trim())
+    .filter(Boolean);
 }
 
 const REVENUE_LABELS: Record<string, string> = {
@@ -96,10 +122,12 @@ const RevenueExpenseList: React.FC = () => {
 
   // 지출 항목 관리 (동적으로 추가 가능, localStorage에 저장·순익계산기와 공유)
   const [customExpenseTypes, setCustomExpenseTypesState] = useState<string[]>(loadSharedCustomExpenseItems);
+  const customItemsSyncedRef = React.useRef(false);
   const setCustomExpenseTypes = (updater: string[] | ((prev: string[]) => string[])) => {
     setCustomExpenseTypesState((prev) => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
       saveSharedCustomExpenseItems(next);
+      saveSetting(SETTINGS_KEY_CUSTOM_EXPENSE_ITEMS, next);
       return next;
     });
   };
@@ -109,6 +137,24 @@ const RevenueExpenseList: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, [selectedDate]);
+
+  useEffect(() => {
+    if (customItemsSyncedRef.current) return;
+    customItemsSyncedRef.current = true;
+
+    const localItems = loadSharedCustomExpenseItems();
+    fetchSetting<string[]>(SETTINGS_KEY_CUSTOM_EXPENSE_ITEMS).then((serverItems) => {
+      const normalizedServerItems = normalizeCustomExpenseItems(serverItems);
+      if (normalizedServerItems.length > 0) {
+        setCustomExpenseTypesState(normalizedServerItems);
+        saveSharedCustomExpenseItems(normalizedServerItems);
+        return;
+      }
+      if (localItems.length > 0) {
+        saveSetting(SETTINGS_KEY_CUSTOM_EXPENSE_ITEMS, localItems);
+      }
+    });
+  }, []);
 
   // 월별 일간 상세 데이터 로드
   const fetchMonthlyData = async () => {
@@ -365,8 +411,8 @@ const RevenueExpenseList: React.FC = () => {
           }
           // 지출
           if (EXPENSE_TYPES.includes(item.type as RevenueExpenseType)) {
-            if (item.type === '일반지출' && item.memo && item.memo.trim()) {
-              // 커스텀 지출: memo를 키로 사용
+            if (item.type === '일반지출' && item.memo && customExpenseTypes.includes(item.memo)) {
+              // 커스텀 지출: 등록된 커스텀 항목일 때만 memo를 키로 사용
               cumExp[item.memo] = (cumExp[item.memo] || 0) + Number(item.amount);
             } else {
               cumExp[item.type] = (cumExp[item.type] || 0) + Number(item.amount);

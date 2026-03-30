@@ -5,6 +5,7 @@ import { useWindowWidth } from '../hooks/useWindowWidth';
 
 const SETTINGS_KEY_ITEMS = 'profit-fixed-expense-items';
 const SETTINGS_KEY_PAYMENTS = 'profit-fixed-expense-payments';
+const SETTINGS_KEY_CUSTOM_EXPENSE_ITEMS = 'shared-custom-expense-items';
 
 async function fetchSetting<T>(key: string): Promise<T | null> {
   try {
@@ -113,6 +114,20 @@ function loadSharedCustomExpenseItems(): string[] {
   return [];
 }
 
+function saveSharedCustomExpenseItems(items: string[]) {
+  try {
+    localStorage.setItem(SHARED_CUSTOM_EXPENSE_ITEMS_KEY, JSON.stringify(items));
+  } catch (_) {}
+}
+
+function normalizeCustomExpenseItems(payload: unknown): string[] {
+  if (!Array.isArray(payload)) return [];
+  return payload
+    .filter((x): x is string => typeof x === 'string')
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
 const REVENUE_LABELS: Record<RevenueExpenseType, string> = {
   '홀매출_주간': '홀매출 (주간)',
   '홀매출_야간': '홀매출 (야간)',
@@ -207,14 +222,33 @@ const ProfitCalculator: React.FC = () => {
   }, []);
 
   // 당일 매출/지출에서 추가한 공유 품목 (지출 항목별 매출 대비 비율에만 표시)
-  const [sharedCustomItems] = useState<string[]>(loadSharedCustomExpenseItems);
+  const [sharedCustomItems, setSharedCustomItems] = useState<string[]>(loadSharedCustomExpenseItems);
   const [expenseByCustomMemo, setExpenseByCustomMemo] = useState<Record<string, number>>({});
   // 당일 매출/지출 관리의 실입금 합계 (선택 기간 내)
   const [totalDeposit, setTotalDeposit] = useState<number>(0);
+  const sharedItemsSyncedRef = useRef(false);
 
   useEffect(() => {
     fetchSummary();
-  }, [startDate, endDate]);
+  }, [startDate, endDate, sharedCustomItems]);
+
+  useEffect(() => {
+    if (sharedItemsSyncedRef.current) return;
+    sharedItemsSyncedRef.current = true;
+
+    const localItems = loadSharedCustomExpenseItems();
+    fetchSetting<string[]>(SETTINGS_KEY_CUSTOM_EXPENSE_ITEMS).then((serverItems) => {
+      const normalizedServerItems = normalizeCustomExpenseItems(serverItems);
+      if (normalizedServerItems.length > 0) {
+        setSharedCustomItems(normalizedServerItems);
+        saveSharedCustomExpenseItems(normalizedServerItems);
+        return;
+      }
+      if (localItems.length > 0) {
+        saveSetting(SETTINGS_KEY_CUSTOM_EXPENSE_ITEMS, localItems);
+      }
+    });
+  }, []);
 
   const fetchSummary = async () => {
     try {
