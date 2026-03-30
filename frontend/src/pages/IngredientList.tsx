@@ -67,6 +67,11 @@ const IngredientList: React.FC = () => {
       const endDate = toDateStr(year, month, lastDay);
       const res = await foodCostAPI.getAll({ start_date: startDate, end_date: endDate, limit: 2000 });
       setRecords(normalizeList<FoodCost>(res.data));
+      foodCostAPI
+        .syncKitchenExpenseRange({ start_date: startDate, end_date: endDate })
+        .catch(() => {
+          /* 동기화 실패는 목록 조회와 무관 */
+        });
     } catch (err) {
       console.error('식자재 데이터 로딩 실패:', err);
       setRecords([]);
@@ -196,6 +201,9 @@ const IngredientList: React.FC = () => {
           + 입력
         </button>
       </div>
+      <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', color: '#64748b' }}>
+        날짜별 <strong>사용(입고)</strong> 금액 합계는 자동으로 <strong>당일 매출/지출관리</strong>의 <strong>주방지출</strong>(메모: 식자재 자동)에 반영되며, <strong>순익계산기</strong>의 주방지출 누적에도 포함됩니다. 실 지급만 입력한 날은 사용 금액이 없으면 주방지출 자동 금액은 0으로 맞춰집니다.
+      </p>
 
       {/* 월별 통계 */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem', margin: '1rem 0' }}>

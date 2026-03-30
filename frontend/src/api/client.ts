@@ -194,4 +194,6 @@ export const foodCostAPI = {
   create: (data: any) => apiClient.post('/food-costs/', data),
   update: (id: number, data: any) => apiClient.put(`/food-costs/${id}`, data),
   delete: (id: number) => apiClient.delete(`/food-costs/${id}`),
+  syncKitchenExpenseRange: (params: { start_date: string; end_date: string }) =>
+    apiClient.post('/food-costs/sync-kitchen-expense-range', null, { params }),
 };

@@ -4,6 +4,7 @@ from typing import List, Optional
 from datetime import date
 from app.models.food_cost import FoodCost
 from app.schemas.food_cost import FoodCostCreate, FoodCostUpdate
+from app.crud import kitchen_expense_sync
 
 
 def get_food_costs(
@@ -36,6 +37,7 @@ def create_food_cost(db: Session, food_cost: FoodCostCreate) -> FoodCost:
     db.add(db_obj)
     db.commit()
     db.refresh(db_obj)
+    kitchen_expense_sync.sync_kitchen_expense_for_date(db, db_obj.date)
     return db_obj
 
 
@@ -47,8 +49,10 @@ def update_food_cost(
         return None
     for field, value in update.model_dump(exclude_unset=True).items():
         setattr(db_obj, field, value)
+    synced_date = db_obj.date
     db.commit()
     db.refresh(db_obj)
+    kitchen_expense_sync.sync_kitchen_expense_for_date(db, synced_date)
     return db_obj
 
 
@@ -56,6 +60,8 @@ def delete_food_cost(db: Session, food_cost_id: int) -> bool:
     db_obj = get_food_cost(db, food_cost_id)
     if not db_obj:
         return False
+    synced_date = db_obj.date
     db.delete(db_obj)
     db.commit()
+    kitchen_expense_sync.sync_kitchen_expense_for_date(db, synced_date)
     return True

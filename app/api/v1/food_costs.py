@@ -1,12 +1,26 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import date
 from app.db.session import get_db
 from app.schemas.food_cost import FoodCost, FoodCostCreate, FoodCostUpdate
 from app.crud import food_cost as crud
+from app.crud import kitchen_expense_sync
 
 router = APIRouter()
+
+
+@router.post("/sync-kitchen-expense-range", status_code=204)
+def sync_kitchen_expense_range(
+    start_date: date = Query(...),
+    end_date: date = Query(...),
+    db: Session = Depends(get_db),
+):
+    """보이는 월 범위 등에서 식자재 사용(입고) 합계를 주방지출(식자재 자동)로 일괄 반영합니다."""
+    if start_date > end_date:
+        raise HTTPException(status_code=400, detail="start_date는 end_date보다 늦을 수 없습니다")
+    kitchen_expense_sync.sync_kitchen_expenses_for_date_range(db, start_date, end_date)
+    return Response(status_code=204)
 
 
 @router.get("/", response_model=List[FoodCost])
