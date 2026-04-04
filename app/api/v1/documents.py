@@ -141,15 +141,8 @@ def get_expiring_documents(
     result = []
     today = date.today()
     for doc in documents:
-        employee = (
-            db.query(Employee)
-            .filter(
-                Employee.id == doc.employee_id,
-                Employee.store_id == store_id,
-            )
-            .first()
-        )
-        if employee and doc.expiry_date:
+        emp = doc.employee
+        if emp and getattr(emp, "store_id", store_id) == store_id and doc.expiry_date:
             days_until_expiry = (doc.expiry_date - today).days
             result.append(
                 ExpiringDocument(
@@ -160,7 +153,7 @@ def get_expiring_documents(
                     issue_date=doc.issue_date,
                     expiry_date=doc.expiry_date,
                     created_at=doc.created_at,
-                    employee_name=employee.name,
+                    employee_name=emp.name,
                     days_until_expiry=days_until_expiry,
                 )
             )
@@ -178,15 +171,8 @@ def get_expired_documents(
 
     result = []
     for doc in documents:
-        employee = (
-            db.query(Employee)
-            .filter(
-                Employee.id == doc.employee_id,
-                Employee.store_id == store_id,
-            )
-            .first()
-        )
-        if employee:
+        emp = doc.employee
+        if emp and getattr(emp, "store_id", store_id) == store_id:
             result.append(
                 DocumentWithEmployee(
                     id=doc.id,
@@ -196,7 +182,7 @@ def get_expired_documents(
                     issue_date=doc.issue_date,
                     expiry_date=doc.expiry_date,
                     created_at=doc.created_at,
-                    employee_name=employee.name,
+                    employee_name=emp.name,
                 )
             )
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { scheduleAPI } from '../api/client';
 import { Schedule } from '../types';
 import { useWindowWidth } from '../hooks/useWindowWidth';
@@ -64,29 +64,6 @@ const ScheduleCalendar: React.FC = () => {
   };
   const calendarGrid = buildCalendarGrid();
 
-  const getSchedulesForDate = (day: number) => {
-    if (day === null) return [];
-    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    const matchDate = (s: Schedule) => {
-      const d = s.date;
-      const normalized = typeof d === 'string' ? d.split('T')[0] : d;
-      return normalized === dateStr;
-    };
-    let daySchedules = schedules.filter(
-      (s) => matchDate(s) && s.schedule_type === '출근',
-    );
-
-    // 홀 / 주방 필터링
-    if (positionFilter !== '전체') {
-      daySchedules = daySchedules.filter((schedule) => {
-        const position = getEmployeePosition(schedule);
-        return position === positionFilter;
-      });
-    }
-
-    return daySchedules;
-  };
-
   const getEmployeeName = (schedule: Schedule) =>
     schedule.employee_name?.trim() || `직원 #${schedule.employee_id}`;
 
@@ -97,6 +74,31 @@ const ScheduleCalendar: React.FC = () => {
       return schedule.work_position;
     }
     return null;
+  };
+
+  /** 출근 스케줄만 날짜 문자열(YYYY-MM-DD) → 배열로 인덱싱 (셀마다 전체 filter 방지) */
+  const schedulesByDateStr = useMemo(() => {
+    const map: Record<string, Schedule[]> = {};
+    for (const s of schedules) {
+      if (s.schedule_type !== '출근') continue;
+      const d = s.date;
+      const normalized = typeof d === 'string' ? d.split('T')[0] : String(d);
+      if (!map[normalized]) map[normalized] = [];
+      map[normalized].push(s);
+    }
+    return map;
+  }, [schedules]);
+
+  const getSchedulesForDate = (day: number) => {
+    if (day === null) return [];
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    let daySchedules = schedulesByDateStr[dateStr] || [];
+    if (positionFilter !== '전체') {
+      daySchedules = daySchedules.filter(
+        (schedule) => getEmployeePosition(schedule) === positionFilter,
+      );
+    }
+    return daySchedules;
   };
 
   const getPositionColor = (position: string | null) => {

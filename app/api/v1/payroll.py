@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from app.db.session import get_db
 from app.api.deps import get_store_id
@@ -12,6 +12,7 @@ from app.schemas.payroll import (
 )
 from app.crud import payroll as crud_payroll
 from app.models.employee import Employee
+from app.models.payroll import Payroll as PayrollModel
 from decimal import Decimal
 
 router = APIRouter()
@@ -106,41 +107,44 @@ def get_payrolls_by_month_with_employee(
     db: Session = Depends(get_db),
     store_id: int = Depends(get_store_id),
 ):
-    """특정 년월의 모든 급여 조회 (직원 정보 포함)"""
-    payrolls = crud_payroll.get_payrolls_by_month(
-        db=db, store_id=store_id, year_month=year_month
+    """특정 년월의 모든 급여 조회 (직원 정보 포함, join 1회)"""
+    payrolls = (
+        db.query(PayrollModel)
+        .options(joinedload(PayrollModel.employee))
+        .filter(
+            PayrollModel.store_id == store_id,
+            PayrollModel.year_month == year_month,
+        )
+        .order_by(PayrollModel.employee_id)
+        .all()
     )
 
     result = []
     for payroll in payrolls:
-        employee = (
-            db.query(Employee)
-            .filter(
-                Employee.id == payroll.employee_id,
-                Employee.store_id == store_id,
+        employee = payroll.employee
+        if not employee or employee.store_id != store_id:
+            continue
+        pos = employee.employee_position
+        pos_val = pos.value if hasattr(pos, "value") else str(pos)
+        result.append(
+            PayrollWithEmployee(
+                id=payroll.id,
+                employee_id=payroll.employee_id,
+                year_month=payroll.year_month,
+                work_hours=payroll.work_hours,
+                base_pay=payroll.base_pay,
+                weekly_holiday_pay=payroll.weekly_holiday_pay,
+                insurance_type=payroll.insurance_type or "미가입",
+                absent_count=payroll.absent_count or 0,
+                deductions=payroll.deductions,
+                employer_deductions=payroll.employer_deductions or Decimal("0"),
+                net_pay=payroll.net_pay,
+                created_at=payroll.created_at,
+                updated_at=payroll.updated_at,
+                employee_name=employee.name,
+                employee_position=pos_val,
             )
-            .first()
         )
-        if employee:
-            result.append(
-                PayrollWithEmployee(
-                    id=payroll.id,
-                    employee_id=payroll.employee_id,
-                    year_month=payroll.year_month,
-                    work_hours=payroll.work_hours,
-                    base_pay=payroll.base_pay,
-                    weekly_holiday_pay=payroll.weekly_holiday_pay,
-                    insurance_type=payroll.insurance_type or "미가입",
-                    absent_count=payroll.absent_count or 0,
-                    deductions=payroll.deductions,
-                    employer_deductions=payroll.employer_deductions or Decimal("0"),
-                    net_pay=payroll.net_pay,
-                    created_at=payroll.created_at,
-                    updated_at=payroll.updated_at,
-                    employee_name=employee.name,
-                    employee_position=employee.employee_position.value,
-                )
-            )
 
     return result
 

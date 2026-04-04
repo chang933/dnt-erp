@@ -91,22 +91,29 @@ def get_attendances_by_month_with_employee(
     db: Session = Depends(get_db),
     store_id: int = Depends(get_store_id),
 ):
-    """특정 월의 모든 출퇴근 기록 조회 (직원 정보 포함)"""
-    attendances = crud_attendance.get_attendances_by_month(
-        db=db, store_id=store_id, year=year, month=month
+    """특정 월의 모든 출퇴근 기록 조회 (직원 정보 포함, join 1회)"""
+    from sqlalchemy.orm import joinedload
+    from app.models.attendance import Attendance as AttendanceModel
+    from calendar import monthrange
+
+    start = date(year, month, 1)
+    end = date(year, month, monthrange(year, month)[1])
+    attendances = (
+        db.query(AttendanceModel)
+        .options(joinedload(AttendanceModel.employee))
+        .filter(
+            AttendanceModel.store_id == store_id,
+            AttendanceModel.date >= start,
+            AttendanceModel.date <= end,
+        )
+        .order_by(AttendanceModel.date, AttendanceModel.employee_id)
+        .all()
     )
 
     result = []
     for attendance in attendances:
-        employee = (
-            db.query(Employee)
-            .filter(
-                Employee.id == attendance.employee_id,
-                Employee.store_id == store_id,
-            )
-            .first()
-        )
-        if employee:
+        emp = attendance.employee
+        if emp and emp.store_id == store_id:
             result.append(
                 AttendanceWithEmployee(
                     id=attendance.id,
@@ -116,7 +123,7 @@ def get_attendances_by_month_with_employee(
                     check_out=attendance.check_out,
                     status=attendance.status,
                     memo=attendance.memo,
-                    employee_name=employee.name,
+                    employee_name=emp.name,
                 )
             )
 

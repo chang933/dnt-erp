@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_
 from typing import List, Optional
 from datetime import date, datetime, timedelta
@@ -38,6 +38,7 @@ def get_expiring_documents(db: Session, store_id: int, days: int = 30) -> List[D
 
     return (
         db.query(Document)
+        .options(joinedload(Document.employee))
         .filter(
             Document.store_id == store_id,
             and_(
@@ -55,6 +56,7 @@ def get_expired_documents(db: Session, store_id: int) -> List[Document]:
     """만료된 서류 조회"""
     return (
         db.query(Document)
+        .options(joinedload(Document.employee))
         .filter(
             Document.store_id == store_id,
             and_(

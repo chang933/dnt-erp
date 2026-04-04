@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, extract, func
 from typing import List, Optional
 from datetime import date, datetime, timedelta
+from calendar import monthrange
 from app.models.attendance import Attendance, AttendanceStatus
 from app.models.employee import Employee
 from app.schemas.attendance import AttendanceCreate, AttendanceUpdate
@@ -73,13 +74,15 @@ def get_attendances_by_date(
 def get_attendances_by_month(
     db: Session, store_id: int, year: int, month: int
 ) -> List[Attendance]:
-    """특정 월의 모든 출퇴근 기록 조회"""
+    """특정 월의 모든 출퇴근 기록 조회 (날짜 범위 — date 인덱스 활용)"""
+    start = date(year, month, 1)
+    end = date(year, month, monthrange(year, month)[1])
     return (
         db.query(Attendance)
         .filter(
             Attendance.store_id == store_id,
-            extract("year", Attendance.date) == year,
-            extract("month", Attendance.date) == month,
+            Attendance.date >= start,
+            Attendance.date <= end,
         )
         .order_by(Attendance.date, Attendance.employee_id)
         .all()

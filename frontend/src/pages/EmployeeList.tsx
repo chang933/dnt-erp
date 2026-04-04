@@ -95,20 +95,25 @@ const EmployeeList: React.FC = () => {
     fetchEmployees();
   }, []);
 
-  useEffect(() => {
-    const fetchDocuments = async () => {
-      if (employees.length === 0) {
-        setDocumentsMap({});
-        return;
-      }
-      const idSet = new Set(employees.map((e) => e.id));
+  const fetchEmployees = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      console.log('직원 목록 불러오기 시작...');
+      const [empRes, docRes] = await Promise.all([
+        employeeAPI.getAll({ limit: 100 }),
+        documentAPI.getAll().catch(() => ({ data: [] })),
+      ]);
+      console.log('직원 목록 응답:', empRes.data);
+      const emps = normalizeEmployeeList(empRes.data);
+      setEmployees(emps);
+      const idSet = new Set(emps.map((e) => e.id));
       const docsMap: Record<number, Document[]> = {};
-      employees.forEach((e) => {
+      emps.forEach((e) => {
         docsMap[e.id] = [];
       });
       try {
-        const response = await documentAPI.getAll();
-        const allDocs = normalizeList<Document>(response.data);
+        const allDocs = normalizeList<Document>(docRes.data);
         allDocs.forEach((doc: Document) => {
           if (idSet.has(doc.employee_id)) {
             docsMap[doc.employee_id].push(doc);
@@ -118,28 +123,13 @@ const EmployeeList: React.FC = () => {
         console.error('서류 일괄 로딩 에러:', err);
       }
       setDocumentsMap(docsMap);
-    };
-
-    if (employees.length > 0) {
-      fetchDocuments();
-    }
-  }, [employees]);
-
-  const fetchEmployees = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      console.log('직원 목록 불러오기 시작...');
-      const response = await employeeAPI.getAll({ limit: 100 });
-      console.log('직원 목록 응답:', response.data);
-      setEmployees(normalizeEmployeeList(response.data));
     } catch (err: any) {
       console.error('직원 목록 로딩 에러:', err);
       console.error('에러 상세:', err.response?.data || err.message);
       const { message, hint } = describeEmployeeListError(err);
       setError(hint ? `${message}\n\n${hint}` : message);
-      // 에러가 발생해도 빈 배열로 설정하여 UI가 표시되도록 함
       setEmployees([]);
+      setDocumentsMap({});
     } finally {
       setLoading(false);
       console.log('직원 목록 로딩 완료');

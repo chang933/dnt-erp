@@ -62,8 +62,7 @@ const EmployeeDetail: React.FC = () => {
 
   useEffect(() => {
     if (id) {
-      fetchEmployee(parseInt(id));
-      fetchDocuments(parseInt(id));
+      loadEmployeePage(parseInt(id, 10));
     }
   }, [id]);
 
@@ -71,45 +70,41 @@ const EmployeeDetail: React.FC = () => {
     if (!canMutate) setIsEditing(false);
   }, [canMutate]);
 
-  const fetchEmployee = async (employeeId: number) => {
+  const loadEmployeePage = async (employeeId: number) => {
+    setLoading(true);
+    setError(null);
     try {
-      setLoading(true);
-      setError(null);
-      const response = await employeeAPI.getById(employeeId);
-      setEmployee(response.data);
-      const newFormData: any = {
-        name: response.data.name,
-        phone: response.data.phone || '',
-        address: response.data.address || '',
-        ssn: (response.data as any).ssn || '',
-        birth_date: response.data.birth_date || '',
-        gender: (response.data as any).gender || '',
-        employee_position: response.data.employee_position,
-        employment_type: (response.data as any).employment_type || 'FULL_TIME',
-        benefit_type: (response.data as any).benefit_type || '4대보험',
-        salary_type: response.data.salary_type,
-        hourly_wage: response.data.hourly_wage || 0,
-        monthly_salary: response.data.monthly_salary || undefined,
-        daily_wage_weekday: (response.data as any).daily_wage_weekday ?? undefined,
-        daily_wage_weekend: (response.data as any).daily_wage_weekend ?? undefined,
-        daily_contract_hours: (response.data as any).daily_contract_hours ?? undefined,
-        hire_date: response.data.hire_date,
-      };
-      setFormData(newFormData);
+      const [empRes, docRes] = await Promise.all([
+        employeeAPI.getById(employeeId),
+        documentAPI.getByEmployee(employeeId),
+      ]);
+      const data = empRes.data;
+      setEmployee(data);
+      setFormData({
+        name: data.name,
+        phone: data.phone || '',
+        address: data.address || '',
+        ssn: (data as any).ssn || '',
+        birth_date: data.birth_date || '',
+        gender: (data as any).gender || '',
+        employee_position: data.employee_position,
+        employment_type: (data as any).employment_type || 'FULL_TIME',
+        benefit_type: (data as any).benefit_type || '4대보험',
+        salary_type: data.salary_type,
+        hourly_wage: data.hourly_wage || 0,
+        monthly_salary: data.monthly_salary || undefined,
+        daily_wage_weekday: (data as any).daily_wage_weekday ?? undefined,
+        daily_wage_weekend: (data as any).daily_wage_weekend ?? undefined,
+        daily_contract_hours: (data as any).daily_contract_hours ?? undefined,
+        hire_date: data.hire_date,
+      });
+      setDocuments(normalizeList<Document>(docRes.data));
     } catch (err: any) {
-      console.error('직원 정보 로딩 에러:', err);
+      console.error('직원/서류 로딩 에러:', err);
       setError(err.response?.data?.detail || '직원 정보를 불러오는데 실패했습니다.');
+      setDocuments([]);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchDocuments = async (employeeId: number) => {
-    try {
-      const response = await documentAPI.getByEmployee(employeeId);
-      setDocuments(normalizeList<Document>(response.data));
-    } catch (err) {
-      console.error('서류 정보 로딩 에러:', err);
     }
   };
 
@@ -291,8 +286,7 @@ const EmployeeDetail: React.FC = () => {
       setContractFile(null);
       setContractIssueDate('');
       
-      await fetchEmployee(parseInt(id));
-      await fetchDocuments(parseInt(id));
+      await loadEmployeePage(parseInt(id, 10));
       
       setIsEditing(false);
       alert('직원 정보가 수정되었습니다.');

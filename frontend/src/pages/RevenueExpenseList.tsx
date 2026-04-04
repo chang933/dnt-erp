@@ -302,106 +302,112 @@ const RevenueExpenseList: React.FC = () => {
         return `${year}-${String(month).padStart(2, '0')}-${String(safeDay).padStart(2, '0')}`;
       };
 
-      try {
-        const [payrollRes, employeeRes] = await Promise.all([
-          payrollAPI.getByMonth(yearMonth).catch(() => ({ data: [] })),
-          employeeAPI.getAll({ limit: 200 }).catch(() => ({ data: [] })),
-        ]);
-        const payrolls = normalizeList<any>(payrollRes.data);
-        const employees = normalizeList<Employee>(employeeRes.data).filter((e: Employee) => e.status === '재직');
-        const employeeMap = new Map<number, Employee>();
-        employees.forEach((emp: Employee) => employeeMap.set(emp.id, emp));
+      const [payrollPart, royaltyGuideResult, cumPart] = await Promise.all([
+        (async () => {
+          try {
+            const [payrollRes, employeeRes] = await Promise.all([
+              payrollAPI.getByMonth(yearMonth).catch(() => ({ data: [] })),
+              employeeAPI.getAll({ limit: 200 }).catch(() => ({ data: [] })),
+            ]);
+            const payrolls = normalizeList<any>(payrollRes.data);
+            const employees = normalizeList<Employee>(employeeRes.data).filter((e: Employee) => e.status === '재직');
+            const employeeMap = new Map<number, Employee>();
+            employees.forEach((emp: Employee) => employeeMap.set(emp.id, emp));
 
-        let salarySum = 0;
-        let deductionSum = 0;
+            let salarySum = 0;
+            let deductionSum = 0;
 
-        payrolls.forEach((p: { employee_id: number; net_pay: number; deductions: number; insurance_type?: string }) => {
-          const emp = employeeMap.get(p.employee_id);
-          if (!emp?.hire_date) return;
-          const payDueDate = getPayDueDate(emp.hire_date);
-          if (payDueDate !== selectedDate) return;
-          salarySum += Number(p.net_pay ?? 0);
-          deductionSum += Number(p.deductions ?? 0);
-        });
+            payrolls.forEach((p: { employee_id: number; net_pay: number; deductions: number; insurance_type?: string }) => {
+              const emp = employeeMap.get(p.employee_id);
+              if (!emp?.hire_date) return;
+              const payDueDate = getPayDueDate(emp.hire_date);
+              if (payDueDate !== selectedDate) return;
+              salarySum += Number(p.net_pay ?? 0);
+              deductionSum += Number(p.deductions ?? 0);
+            });
 
-        if (salarySum > 0) expenseKeys['급여'] = String(Math.round(salarySum));
-        if (deductionSum > 0) expenseKeys['4대보험료'] = String(Math.round(deductionSum));
-      } catch (_) {
-        // 급여/직원 조회 실패 시 입력란만 비워둠
-      }
+            return { salarySum, deductionSum };
+          } catch {
+            return { salarySum: 0, deductionSum: 0 };
+          }
+        })(),
+        (async (): Promise<number | null> => {
+          try {
+            const selDate = new Date(selectedDate);
+            const prevYear = selDate.getMonth() === 0 ? selDate.getFullYear() - 1 : selDate.getFullYear();
+            const prevMonth = selDate.getMonth() === 0 ? 12 : selDate.getMonth();
+            const prevStart = `${prevYear}-${String(prevMonth).padStart(2, '0')}-01`;
+            const prevLastDay = new Date(prevYear, prevMonth, 0).getDate();
+            const prevEnd = `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(prevLastDay).padStart(2, '0')}`;
+            const prevRes = await revenueExpenseAPI.getAll({ start_date: prevStart, end_date: prevEnd });
+            let hallRev = 0;
+            let deliveryRev = 0;
+            normalizeList<RevenueExpense>(prevRes.data).forEach((item: RevenueExpense) => {
+              if (item.type === '홀매출_주간' || item.type === '홀매출_야간') {
+                if ((item.memo || '') !== '식권대장') hallRev += Number(item.amount);
+              }
+              if (item.type === '배달매출_주간' || item.type === '배달매출_야간') {
+                deliveryRev += Number(item.amount);
+              }
+            });
+            const guide = Math.round((hallRev + deliveryRev) * 0.02);
+            return guide > 0 ? guide : null;
+          } catch {
+            return null;
+          }
+        })(),
+        (async () => {
+          try {
+            const selD = new Date(selectedDate);
+            const cumStart = `${selD.getFullYear()}-${String(selD.getMonth() + 1).padStart(2, '0')}-01`;
+            const cumRes = await revenueExpenseAPI.getAll({ start_date: cumStart, end_date: selectedDate, limit: 1000 });
+            const cumRev: Record<string, number> = {};
+            const cumDep: Record<string, number> = {};
+            const cumExp: Record<string, number> = {};
+            normalizeList<RevenueExpense>(cumRes.data).forEach((item: RevenueExpense) => {
+              if (item.type === '홀매출_주간' || item.type === '홀매출_야간') {
+                if (item.memo === '식권대장') {
+                  cumRev['홀매출_식권대장'] = (cumRev['홀매출_식권대장'] || 0) + Number(item.amount);
+                } else {
+                  cumRev['홀매출'] = (cumRev['홀매출'] || 0) + Number(item.amount);
+                }
+              }
+              if (item.type === '배달매출_주간' || item.type === '배달매출_야간') {
+                const k = `배달매출_${item.memo || '기타'}`;
+                cumRev[k] = (cumRev[k] || 0) + Number(item.amount);
+              }
+              if (item.type === '홀매출_실입금') {
+                cumDep['홀매출'] = (cumDep['홀매출'] || 0) + Number(item.amount);
+              }
+              if (item.type === '배달매출_실입금') {
+                const k = `배달매출_${item.memo || '기타'}`;
+                cumDep[k] = (cumDep[k] || 0) + Number(item.amount);
+              }
+              if (EXPENSE_TYPES.includes(item.type as RevenueExpenseType)) {
+                if (item.type === '일반지출' && item.memo && customExpenseTypes.includes(item.memo)) {
+                  cumExp[item.memo] = (cumExp[item.memo] || 0) + Number(item.amount);
+                } else {
+                  cumExp[item.type] = (cumExp[item.type] || 0) + Number(item.amount);
+                }
+              }
+            });
+            return { cumRev, cumDep, cumExp };
+          } catch {
+            return {
+              cumRev: {} as Record<string, number>,
+              cumDep: {} as Record<string, number>,
+              cumExp: {} as Record<string, number>,
+            };
+          }
+        })(),
+      ]);
 
-      // 전달 매출 조회 → 로얄티 2% 가이드라인 계산 (홀 식권대장 제외)
-      try {
-        const selDate = new Date(selectedDate);
-        const prevYear = selDate.getMonth() === 0 ? selDate.getFullYear() - 1 : selDate.getFullYear();
-        const prevMonth = selDate.getMonth() === 0 ? 12 : selDate.getMonth();
-        const prevStart = `${prevYear}-${String(prevMonth).padStart(2, '0')}-01`;
-        const prevLastDay = new Date(prevYear, prevMonth, 0).getDate();
-        const prevEnd = `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(prevLastDay).padStart(2, '0')}`;
-        const prevRes = await revenueExpenseAPI.getAll({ start_date: prevStart, end_date: prevEnd });
-        let hallRev = 0;
-        let deliveryRev = 0;
-        normalizeList<RevenueExpense>(prevRes.data).forEach((item: RevenueExpense) => {
-          if (item.type === '홀매출_주간' || item.type === '홀매출_야간') {
-            if ((item.memo || '') !== '식권대장') hallRev += Number(item.amount);
-          }
-          if (item.type === '배달매출_주간' || item.type === '배달매출_야간') {
-            deliveryRev += Number(item.amount);
-          }
-        });
-        const guide = Math.round((hallRev + deliveryRev) * 0.02);
-        setRoyaltyGuide(guide > 0 ? guide : null);
-      } catch (_) {
-        setRoyaltyGuide(null);
-      }
-
-      // ── 누적 집계 (월 1일 ~ 선택일): 매출·실입금·지출 모두 ──────────────────
-      try {
-        const selD = new Date(selectedDate);
-        const cumStart = `${selD.getFullYear()}-${String(selD.getMonth() + 1).padStart(2, '0')}-01`;
-        const cumRes = await revenueExpenseAPI.getAll({ start_date: cumStart, end_date: selectedDate, limit: 1000 });
-        const cumRev: Record<string, number> = {};
-        const cumDep: Record<string, number> = {};
-        const cumExp: Record<string, number> = {};
-        normalizeList<RevenueExpense>(cumRes.data).forEach((item: RevenueExpense) => {
-          // 매출
-          if (item.type === '홀매출_주간' || item.type === '홀매출_야간') {
-            if (item.memo === '식권대장') {
-              cumRev['홀매출_식권대장'] = (cumRev['홀매출_식권대장'] || 0) + Number(item.amount);
-            } else {
-              cumRev['홀매출'] = (cumRev['홀매출'] || 0) + Number(item.amount);
-            }
-          }
-          if (item.type === '배달매출_주간' || item.type === '배달매출_야간') {
-            const k = `배달매출_${item.memo || '기타'}`;
-            cumRev[k] = (cumRev[k] || 0) + Number(item.amount);
-          }
-          // 실입금
-          if (item.type === '홀매출_실입금') {
-            cumDep['홀매출'] = (cumDep['홀매출'] || 0) + Number(item.amount);
-          }
-          if (item.type === '배달매출_실입금') {
-            const k = `배달매출_${item.memo || '기타'}`;
-            cumDep[k] = (cumDep[k] || 0) + Number(item.amount);
-          }
-          // 지출
-          if (EXPENSE_TYPES.includes(item.type as RevenueExpenseType)) {
-            if (item.type === '일반지출' && item.memo && customExpenseTypes.includes(item.memo)) {
-              // 커스텀 지출: 등록된 커스텀 항목일 때만 memo를 키로 사용
-              cumExp[item.memo] = (cumExp[item.memo] || 0) + Number(item.amount);
-            } else {
-              cumExp[item.type] = (cumExp[item.type] || 0) + Number(item.amount);
-            }
-          }
-        });
-        setCumulativeRevenue(cumRev);
-        setCumulativeDeposit(cumDep);
-        setCumulativeExpense(cumExp);
-      } catch (_) {
-        setCumulativeRevenue({});
-        setCumulativeDeposit({});
-        setCumulativeExpense({});
-      }
+      if (payrollPart.salarySum > 0) expenseKeys['급여'] = String(Math.round(payrollPart.salarySum));
+      if (payrollPart.deductionSum > 0) expenseKeys['4대보험료'] = String(Math.round(payrollPart.deductionSum));
+      setRoyaltyGuide(royaltyGuideResult);
+      setCumulativeRevenue(cumPart.cumRev);
+      setCumulativeDeposit(cumPart.cumDep);
+      setCumulativeExpense(cumPart.cumExp);
 
       setRevenueInputs(revenueKeys);
       setDepositInputs(depositKeys);
