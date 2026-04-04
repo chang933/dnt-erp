@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { revenueExpenseAPI, payrollAPI, employeeAPI, apiClient } from '../api/client';
 import { RevenueExpense, RevenueExpenseCreate, RevenueExpenseType } from '../types';
 import type { Employee } from '../types';
@@ -90,6 +90,48 @@ function normalizeList<T>(payload: any): T[] {
   return [];
 }
 
+/** 월 누적 집계 (fetchData / 저장 후 경량 갱신 공통) */
+function aggregateCumulativeFromItems(
+  items: RevenueExpense[],
+  customExpenseTypes: string[],
+): {
+  cumRev: Record<string, number>;
+  cumDep: Record<string, number>;
+  cumExp: Record<string, number>;
+} {
+  const cumRev: Record<string, number> = {};
+  const cumDep: Record<string, number> = {};
+  const cumExp: Record<string, number> = {};
+  items.forEach((item: RevenueExpense) => {
+    if (item.type === '홀매출_주간' || item.type === '홀매출_야간') {
+      if (item.memo === '식권대장') {
+        cumRev['홀매출_식권대장'] = (cumRev['홀매출_식권대장'] || 0) + Number(item.amount);
+      } else {
+        cumRev['홀매출'] = (cumRev['홀매출'] || 0) + Number(item.amount);
+      }
+    }
+    if (item.type === '배달매출_주간' || item.type === '배달매출_야간') {
+      const k = `배달매출_${item.memo || '기타'}`;
+      cumRev[k] = (cumRev[k] || 0) + Number(item.amount);
+    }
+    if (item.type === '홀매출_실입금') {
+      cumDep['홀매출'] = (cumDep['홀매출'] || 0) + Number(item.amount);
+    }
+    if (item.type === '배달매출_실입금') {
+      const k = `배달매출_${item.memo || '기타'}`;
+      cumDep[k] = (cumDep[k] || 0) + Number(item.amount);
+    }
+    if (EXPENSE_TYPES.includes(item.type as RevenueExpenseType)) {
+      if (item.type === '일반지출' && item.memo && customExpenseTypes.includes(item.memo)) {
+        cumExp[item.memo] = (cumExp[item.memo] || 0) + Number(item.amount);
+      } else {
+        cumExp[item.type] = (cumExp[item.type] || 0) + Number(item.amount);
+      }
+    }
+  });
+  return { cumRev, cumDep, cumExp };
+}
+
 const RevenueExpenseList: React.FC = () => {
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth <= 768;
@@ -133,6 +175,13 @@ const RevenueExpenseList: React.FC = () => {
   };
   const [newExpenseType, setNewExpenseType] = useState<string>('');
   const [editingExpenseTypes, setEditingExpenseTypes] = useState<boolean>(false);
+
+  /** 전체 로드 시 계산된 급여일 자동입력 힌트 — 저장 후 경량 갱신 시 API 2회만 쓰기 위해 재사용 */
+  const payrollInputHintRef = useRef<{
+    date: string;
+    salarySum: number;
+    deductionSum: number;
+  } | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -361,37 +410,10 @@ const RevenueExpenseList: React.FC = () => {
             const selD = new Date(selectedDate);
             const cumStart = `${selD.getFullYear()}-${String(selD.getMonth() + 1).padStart(2, '0')}-01`;
             const cumRes = await revenueExpenseAPI.getAll({ start_date: cumStart, end_date: selectedDate, limit: 1000 });
-            const cumRev: Record<string, number> = {};
-            const cumDep: Record<string, number> = {};
-            const cumExp: Record<string, number> = {};
-            normalizeList<RevenueExpense>(cumRes.data).forEach((item: RevenueExpense) => {
-              if (item.type === '홀매출_주간' || item.type === '홀매출_야간') {
-                if (item.memo === '식권대장') {
-                  cumRev['홀매출_식권대장'] = (cumRev['홀매출_식권대장'] || 0) + Number(item.amount);
-                } else {
-                  cumRev['홀매출'] = (cumRev['홀매출'] || 0) + Number(item.amount);
-                }
-              }
-              if (item.type === '배달매출_주간' || item.type === '배달매출_야간') {
-                const k = `배달매출_${item.memo || '기타'}`;
-                cumRev[k] = (cumRev[k] || 0) + Number(item.amount);
-              }
-              if (item.type === '홀매출_실입금') {
-                cumDep['홀매출'] = (cumDep['홀매출'] || 0) + Number(item.amount);
-              }
-              if (item.type === '배달매출_실입금') {
-                const k = `배달매출_${item.memo || '기타'}`;
-                cumDep[k] = (cumDep[k] || 0) + Number(item.amount);
-              }
-              if (EXPENSE_TYPES.includes(item.type as RevenueExpenseType)) {
-                if (item.type === '일반지출' && item.memo && customExpenseTypes.includes(item.memo)) {
-                  cumExp[item.memo] = (cumExp[item.memo] || 0) + Number(item.amount);
-                } else {
-                  cumExp[item.type] = (cumExp[item.type] || 0) + Number(item.amount);
-                }
-              }
-            });
-            return { cumRev, cumDep, cumExp };
+            return aggregateCumulativeFromItems(
+              normalizeList<RevenueExpense>(cumRes.data),
+              customExpenseTypes,
+            );
           } catch {
             return {
               cumRev: {} as Record<string, number>,
@@ -401,6 +423,12 @@ const RevenueExpenseList: React.FC = () => {
           }
         })(),
       ]);
+
+      payrollInputHintRef.current = {
+        date: selectedDate,
+        salarySum: payrollPart.salarySum,
+        deductionSum: payrollPart.deductionSum,
+      };
 
       if (payrollPart.salarySum > 0) expenseKeys['급여'] = String(Math.round(payrollPart.salarySum));
       if (payrollPart.deductionSum > 0) expenseKeys['4대보험료'] = String(Math.round(payrollPart.deductionSum));
@@ -417,6 +445,60 @@ const RevenueExpenseList: React.FC = () => {
       setRevenueExpenses([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  /** 매출/지출/실입금 저장·삭제 후: 당일 목록 + 월 누적만 재조회 (급여일 힌트는 마지막 전체 로드 값 유지) */
+  const refreshAfterMutation = async () => {
+    try {
+      const selD = new Date(selectedDate);
+      const cumStart = `${selD.getFullYear()}-${String(selD.getMonth() + 1).padStart(2, '0')}-01`;
+      const [listRes, cumRes] = await Promise.all([
+        revenueExpenseAPI.getAll({ start_date: selectedDate, end_date: selectedDate }),
+        revenueExpenseAPI.getAll({ start_date: cumStart, end_date: selectedDate, limit: 1000 }),
+      ]);
+      const listData = normalizeList<RevenueExpense>(listRes.data);
+      setRevenueExpenses(listData);
+
+      const { cumRev, cumDep, cumExp } = aggregateCumulativeFromItems(
+        normalizeList<RevenueExpense>(cumRes.data),
+        customExpenseTypes,
+      );
+      setCumulativeRevenue(cumRev);
+      setCumulativeDeposit(cumDep);
+      setCumulativeExpense(cumExp);
+
+      const revenueKeys: Record<string, string> = {};
+      const expenseKeys: Record<string, string> = {};
+      DISPLAY_REVENUE_TYPES.forEach((type) => {
+        revenueKeys[type] = '';
+      });
+      revenueKeys['홀매출_식권대장'] = '';
+      deliveryCategories.forEach((cat) => {
+        revenueKeys[`배달매출_${cat}`] = '';
+      });
+      const depositKeys: Record<string, string> = {};
+      DISPLAY_REVENUE_TYPES.forEach((type) => {
+        depositKeys[type] = '';
+      });
+      deliveryCategories.forEach((cat) => {
+        depositKeys[`배달매출_${cat}`] = '';
+      });
+      EXPENSE_TYPES.forEach((type) => {
+        expenseKeys[type] = '';
+      });
+
+      const hint = payrollInputHintRef.current;
+      if (hint && hint.date === selectedDate) {
+        if (hint.salarySum > 0) expenseKeys['급여'] = String(Math.round(hint.salarySum));
+        if (hint.deductionSum > 0) expenseKeys['4대보험료'] = String(Math.round(hint.deductionSum));
+      }
+
+      setRevenueInputs(revenueKeys);
+      setDepositInputs(depositKeys);
+      setExpenseInputs(expenseKeys);
+    } catch (err: any) {
+      console.error('저장 후 목록 갱신 실패:', err);
     }
   };
 
@@ -453,7 +535,7 @@ const RevenueExpenseList: React.FC = () => {
       };
       await revenueExpenseAPI.create(data);
       setDepositInputs(prev => ({ ...prev, [key]: '' }));
-      await fetchData();
+      await refreshAfterMutation();
     } catch (err: any) {
       console.error('실입금 저장 실패:', err);
       alert('실입금 저장에 실패했습니다: ' + (err.response?.data?.detail || err.message));
@@ -479,7 +561,7 @@ const RevenueExpenseList: React.FC = () => {
       };
       await revenueExpenseAPI.create(data);
       setRevenueInputs(prev => ({ ...prev, [key]: '' }));
-      await fetchData();
+      await refreshAfterMutation();
     } catch (err: any) {
       console.error('매출 저장 실패:', err);
       alert('매출 저장에 실패했습니다: ' + (err.response?.data?.detail || err.message));
@@ -503,7 +585,7 @@ const RevenueExpenseList: React.FC = () => {
       };
       await revenueExpenseAPI.create(data);
       setExpenseInputs(prev => ({ ...prev, [key]: '' }));
-      await fetchData();
+      await refreshAfterMutation();
     } catch (err: any) {
       console.error('지출 저장 실패:', err);
       alert('지출 저장에 실패했습니다: ' + (err.response?.data?.detail || err.message));
@@ -515,7 +597,7 @@ const RevenueExpenseList: React.FC = () => {
 
     try {
       await revenueExpenseAPI.delete(id);
-      await fetchData();
+      await refreshAfterMutation();
     } catch (err: any) {
       console.error('삭제 실패:', err);
       alert('삭제에 실패했습니다: ' + (err.response?.data?.detail || err.message));
@@ -1263,7 +1345,7 @@ const RevenueExpenseList: React.FC = () => {
                           };
                           await revenueExpenseAPI.create(data);
                           setExpenseInputs(prev => ({ ...prev, [key]: '' }));
-                          await fetchData();
+                          await refreshAfterMutation();
                         } catch (err: any) {
                           console.error('지출 저장 실패:', err);
                           alert('지출 저장에 실패했습니다: ' + (err.response?.data?.detail || err.message));

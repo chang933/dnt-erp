@@ -33,9 +33,10 @@ const AttendanceList: React.FC = () => {
     return employee.employee_position === positionFilter;
   });
 
-  const fetchData = async () => {
+  const fetchData = async (opts?: { silent?: boolean }) => {
+    const silent = Boolean(opts?.silent);
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const [attendanceRes, scheduleRes, employeeRes] = await Promise.all([
         attendanceAPI.getAll({ date: selectedDate }),
         scheduleAPI.getAll({ start_date: selectedDate, end_date: selectedDate }),
@@ -46,11 +47,13 @@ const AttendanceList: React.FC = () => {
       setEmployees(normalizeList<Employee>(employeeRes.data));
     } catch (err: any) {
       console.error('데이터 로딩 실패:', err);
-      setAttendances([]);
-      setSchedules([]);
-      setEmployees([]);
+      if (!silent) {
+        setAttendances([]);
+        setSchedules([]);
+        setEmployees([]);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -181,8 +184,8 @@ const AttendanceList: React.FC = () => {
       // 변경 상태 저장
       setChangedStatuses(prev => ({ ...prev, [employeeId]: newStatus }));
       
-      // 데이터 다시 불러오기
-      await fetchData();
+      // 저장 직후: 전체 로딩 스피너 없이 동일 날짜만 갱신 (체감 속도)
+      await fetchData({ silent: true });
     } catch (err: any) {
       console.error('상태 변경 실패:', err);
       alert('상태 변경에 실패했습니다: ' + (err.response?.data?.detail || err.message));

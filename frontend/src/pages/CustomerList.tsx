@@ -25,16 +25,17 @@ const CustomerList: React.FC = () => {
     fetchCustomers();
   }, []);
 
-  const fetchCustomers = async () => {
+  const fetchCustomers = async (opts?: { silent?: boolean }) => {
+    const silent = Boolean(opts?.silent);
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const response = await customerAPI.getAll({ limit: 100 });
       setCustomers(normalizeList<Customer>(response.data));
     } catch (err) {
       console.error('데이터 로딩 실패:', err);
-      setCustomers([]);
+      if (!silent) setCustomers([]);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -44,7 +45,7 @@ const CustomerList: React.FC = () => {
       await customerAPI.create(formData);
       setShowForm(false);
       setFormData({ name: '', phone: '', memo: '', is_vip: false });
-      fetchCustomers();
+      fetchCustomers({ silent: true });
     } catch (err: any) {
       alert(err.response?.data?.detail || '고객 등록에 실패했습니다.');
     }

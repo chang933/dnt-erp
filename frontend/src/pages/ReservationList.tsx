@@ -51,16 +51,17 @@ const ReservationList: React.FC = () => {
     fetchReservations();
   }, []);
 
-  const fetchReservations = async () => {
+  const fetchReservations = async (opts?: { silent?: boolean }) => {
+    const silent = Boolean(opts?.silent);
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const response = await reservationAPI.getAll({ limit: 1000 });
       setReservations(normalizeList<Reservation>(response.data));
     } catch (err) {
       console.error('예약 목록 로딩 실패:', err);
-      setReservations([]);
+      if (!silent) setReservations([]);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -151,7 +152,7 @@ const ReservationList: React.FC = () => {
         await reservationAPI.create(payload);
       }
       closeForm();
-      await fetchReservations();
+      await fetchReservations({ silent: true });
     } catch (err: any) {
       alert(err.response?.data?.detail || '저장에 실패했습니다.');
     } finally {
@@ -163,7 +164,7 @@ const ReservationList: React.FC = () => {
     if (!window.confirm('이 예약을 삭제하시겠습니까?')) return;
     try {
       await reservationAPI.delete(id);
-      await fetchReservations();
+      await fetchReservations({ silent: true });
     } catch (err: any) {
       alert(err.response?.data?.detail || '삭제에 실패했습니다.');
     }

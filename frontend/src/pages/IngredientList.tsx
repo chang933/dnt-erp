@@ -68,8 +68,9 @@ const IngredientList: React.FC = () => {
     }
   }, [canMutate]);
 
-  const fetchRecords = async () => {
-    setLoading(true);
+  const fetchRecords = async (opts?: { silent?: boolean }) => {
+    const silent = Boolean(opts?.silent);
+    if (!silent) setLoading(true);
     try {
       const startDate = toDateStr(year, month, 1);
       const lastDay = new Date(year, month + 1, 0).getDate();
@@ -85,9 +86,9 @@ const IngredientList: React.FC = () => {
       }
     } catch (err) {
       console.error('식자재 데이터 로딩 실패:', err);
-      setRecords([]);
+      if (!silent) setRecords([]);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -187,7 +188,7 @@ const IngredientList: React.FC = () => {
         await foodCostAPI.create(payload);
       }
       closeForm();
-      await fetchRecords();
+      await fetchRecords({ silent: true });
     } catch (err: any) {
       alert(err.response?.data?.detail || '저장에 실패했습니다.');
     } finally {
@@ -200,7 +201,7 @@ const IngredientList: React.FC = () => {
     if (!window.confirm('삭제하시겠습니까?')) return;
     try {
       await foodCostAPI.delete(id);
-      await fetchRecords();
+      await fetchRecords({ silent: true });
     } catch (err: any) {
       alert(err.response?.data?.detail || '삭제에 실패했습니다.');
     }

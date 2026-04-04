@@ -34,6 +34,8 @@ function normalizeList<T>(payload: any): T[] {
   return [];
 }
 
+const PAYROLL_LOAD_DEBUG = process.env.NODE_ENV === 'development';
+
 const PayrollList: React.FC = () => {
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth <= 768;
@@ -64,9 +66,10 @@ const PayrollList: React.FC = () => {
     }
   }, [yearMonth]);
 
-  const fetchData = async () => {
+  const fetchData = async (opts?: { silent?: boolean }) => {
+    const silent = Boolean(opts?.silent);
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const [payrollRes, employeeRes, attendanceRes, scheduleRes] = await Promise.all([
         payrollAPI.getByMonth(yearMonth).catch(() => ({ data: [] })),
         employeeAPI.getAll({ limit: 100 }), // status 필터 제거하고 전체 조회 후 필터링
@@ -74,8 +77,10 @@ const PayrollList: React.FC = () => {
         scheduleAPI.getByMonth(year, month).catch(() => ({ data: [] })),
       ]);
 
-      console.log('직원 API 원본 응답:', employeeRes);
-      console.log('직원 API 데이터:', employeeRes.data);
+      if (PAYROLL_LOAD_DEBUG) {
+        console.log('직원 API 원본 응답:', employeeRes);
+        console.log('직원 API 데이터:', employeeRes.data);
+      }
 
       const payrollsData = normalizeList<any>(payrollRes.data);
       const allEmployeesData = normalizeList<Employee>(employeeRes.data);
@@ -84,20 +89,22 @@ const PayrollList: React.FC = () => {
       const attendancesData = normalizeList<Attendance>(attendanceRes.data);
       const schedulesData = normalizeList<Schedule>(scheduleRes.data);
 
-      console.log('급여 데이터 로드:', {
-        payrollsCount: payrollsData.length,
-        employeesCount: employeesData.length,
-        attendancesCount: attendancesData.length,
-        schedulesCount: schedulesData.length,
-      });
-      console.log('직원 상세 데이터:', employeesData);
-      employeesData.forEach((e: any) => {
-        console.log(`직원 ${e.name} 전체 객체:`, e);
-        console.log(`직원 ${e.name} 키 목록:`, Object.keys(e));
-        console.log(`직원 ${e.name} salary_type 직접 접근:`, e.salary_type, e['salary_type']);
-        console.log(`직원 ${e.name} monthly_salary 직접 접근:`, e.monthly_salary, e['monthly_salary']);
-        console.log(`직원 ${e.name} hourly_wage 직접 접근:`, e.hourly_wage, e['hourly_wage']);
-      });
+      if (PAYROLL_LOAD_DEBUG) {
+        console.log('급여 데이터 로드:', {
+          payrollsCount: payrollsData.length,
+          employeesCount: employeesData.length,
+          attendancesCount: attendancesData.length,
+          schedulesCount: schedulesData.length,
+        });
+        console.log('직원 상세 데이터:', employeesData);
+        employeesData.forEach((e: any) => {
+          console.log(`직원 ${e.name} 전체 객체:`, e);
+          console.log(`직원 ${e.name} 키 목록:`, Object.keys(e));
+          console.log(`직원 ${e.name} salary_type 직접 접근:`, e.salary_type, e['salary_type']);
+          console.log(`직원 ${e.name} monthly_salary 직접 접근:`, e.monthly_salary, e['monthly_salary']);
+          console.log(`직원 ${e.name} hourly_wage 직접 접근:`, e.hourly_wage, e['hourly_wage']);
+        });
+      }
 
       // 출퇴근 기록을 직원별로 그룹화
       const attendancesMap: Record<number, Attendance[]> = {};
@@ -151,17 +158,19 @@ const PayrollList: React.FC = () => {
         
         // salary_type 확인 및 처리
         const salaryType = (employee as any).salary_type || employee.salary_type;
-        console.log(`직원 ${employee.name} 급여 정보:`, {
-          salary_type: salaryType,
-          monthly_salary: (employee as any).monthly_salary,
-          hourly_wage: (employee as any).hourly_wage,
-          전체데이터키: Object.keys(employee),
-        });
-        
+        if (PAYROLL_LOAD_DEBUG) {
+          console.log(`직원 ${employee.name} 급여 정보:`, {
+            salary_type: salaryType,
+            monthly_salary: (employee as any).monthly_salary,
+            hourly_wage: (employee as any).hourly_wage,
+            전체데이터키: Object.keys(employee),
+          });
+        }
+
         if (salaryType === '월급' || salaryType === 'MONTHLY') {
           const monthlySalary = (employee as any).monthly_salary || employee.monthly_salary;
           baseSalary = Number(monthlySalary || 0);
-          console.log(`직원 ${employee.name} (월급): ${baseSalary}원`);
+          if (PAYROLL_LOAD_DEBUG) console.log(`직원 ${employee.name} (월급): ${baseSalary}원`);
         } else if (salaryType === '시급' || salaryType === 'HOURLY') {
           const hourlyWage = (employee as any).hourly_wage || employee.hourly_wage;
           const dailyContractHours = (employee as any).daily_contract_hours != null ? Number((employee as any).daily_contract_hours) : undefined;
@@ -175,7 +184,11 @@ const PayrollList: React.FC = () => {
           workHours = workDaysInfo.totalHours;
           thisMonthWorkDays = workDaysInfo.workDays;
           baseSalary = workHours * Number(hourlyWage || 0);
-          console.log(`직원 ${employee.name} (시급): ${workDaysInfo.workDays}일 × ${dailyContractHours ?? '(평일10/주말11)'}시간 × ${Number(hourlyWage || 0)}원 = ${baseSalary}원`);
+          if (PAYROLL_LOAD_DEBUG) {
+            console.log(
+              `직원 ${employee.name} (시급): ${workDaysInfo.workDays}일 × ${dailyContractHours ?? '(평일10/주말11)'}시간 × ${Number(hourlyWage || 0)}원 = ${baseSalary}원`,
+            );
+          }
         } else if (salaryType === '일급') {
           const wd = Number((employee as any).daily_wage_weekday || 0);
           const we = Number((employee as any).daily_wage_weekend || 0);
@@ -189,10 +202,12 @@ const PayrollList: React.FC = () => {
           workHours = 0;
           thisMonthWorkDays = dailyInfo.workDays;
           baseSalary = dailyInfo.basePay;
-          console.log(
-            `직원 ${employee.name} (일급): 출근 ${dailyInfo.workDays}일 (평일 ${dailyInfo.weekdayWorkDays} / 주말 ${dailyInfo.weekendWorkDays}) → ${baseSalary}원`
-          );
-        } else {
+          if (PAYROLL_LOAD_DEBUG) {
+            console.log(
+              `직원 ${employee.name} (일급): 출근 ${dailyInfo.workDays}일 (평일 ${dailyInfo.weekdayWorkDays} / 주말 ${dailyInfo.weekendWorkDays}) → ${baseSalary}원`,
+            );
+          }
+        } else if (PAYROLL_LOAD_DEBUG) {
           console.log(`직원 ${employee.name}: 급여 타입이 없거나 잘못됨 - ${salaryType}`, { employee });
         }
 
@@ -285,7 +300,7 @@ const PayrollList: React.FC = () => {
     } catch (err) {
       console.error('데이터 로딩 실패:', err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -589,7 +604,7 @@ const PayrollList: React.FC = () => {
 
       await Promise.all(savePromises);
       alert('모든 급여 정보가 저장되었습니다.');
-      await fetchData();
+      await fetchData({ silent: true });
     } catch (err: any) {
       console.error('저장 실패:', err);
       alert('저장에 실패했습니다: ' + (err.response?.data?.detail || err.message));

@@ -95,10 +95,13 @@ const EmployeeList: React.FC = () => {
     fetchEmployees();
   }, []);
 
-  const fetchEmployees = async () => {
+  const fetchEmployees = async (opts?: { silent?: boolean }) => {
+    const silent = Boolean(opts?.silent);
     try {
-      setLoading(true);
-      setError(null);
+      if (!silent) {
+        setLoading(true);
+        setError(null);
+      }
       console.log('직원 목록 불러오기 시작...');
       const [empRes, docRes] = await Promise.all([
         employeeAPI.getAll({ limit: 100 }),
@@ -126,12 +129,14 @@ const EmployeeList: React.FC = () => {
     } catch (err: any) {
       console.error('직원 목록 로딩 에러:', err);
       console.error('에러 상세:', err.response?.data || err.message);
-      const { message, hint } = describeEmployeeListError(err);
-      setError(hint ? `${message}\n\n${hint}` : message);
-      setEmployees([]);
-      setDocumentsMap({});
+      if (!silent) {
+        const { message, hint } = describeEmployeeListError(err);
+        setError(hint ? `${message}\n\n${hint}` : message);
+        setEmployees([]);
+        setDocumentsMap({});
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
       console.log('직원 목록 로딩 완료');
     }
   };
@@ -232,7 +237,7 @@ const EmployeeList: React.FC = () => {
       setHealthCertIssueDate('');
       setContractFile(null);
       setContractIssueDate('');
-      fetchEmployees();
+      fetchEmployees({ silent: true });
       alert('직원이 성공적으로 등록되었습니다.');
     } catch (err: any) {
       alert(err.response?.data?.detail || '직원 등록에 실패했습니다.');
@@ -244,7 +249,7 @@ const EmployeeList: React.FC = () => {
     
     try {
       await employeeAPI.delete(id);
-      fetchEmployees();
+      fetchEmployees({ silent: true });
     } catch (err: any) {
       alert(err.response?.data?.detail || '퇴사 처리에 실패했습니다.');
     }
@@ -323,7 +328,7 @@ const EmployeeList: React.FC = () => {
           <small style={{ display: 'block', marginTop: '0.65rem', color: '#5c6c7c' }}>
             API: {API_BASE_URL}
           </small>
-          <button type="button" className="btn btn-secondary" onClick={fetchEmployees} style={{ marginTop: '0.65rem' }}>
+          <button type="button" className="btn btn-secondary" onClick={() => fetchEmployees()} style={{ marginTop: '0.65rem' }}>
             다시 시도
           </button>
         </div>

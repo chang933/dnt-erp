@@ -70,9 +70,12 @@ const EmployeeDetail: React.FC = () => {
     if (!canMutate) setIsEditing(false);
   }, [canMutate]);
 
-  const loadEmployeePage = async (employeeId: number) => {
-    setLoading(true);
-    setError(null);
+  const loadEmployeePage = async (employeeId: number, opts?: { silent?: boolean }) => {
+    const silent = Boolean(opts?.silent);
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const [empRes, docRes] = await Promise.all([
         employeeAPI.getById(employeeId),
@@ -101,10 +104,12 @@ const EmployeeDetail: React.FC = () => {
       setDocuments(normalizeList<Document>(docRes.data));
     } catch (err: any) {
       console.error('직원/서류 로딩 에러:', err);
-      setError(err.response?.data?.detail || '직원 정보를 불러오는데 실패했습니다.');
-      setDocuments([]);
+      if (!silent) {
+        setError(err.response?.data?.detail || '직원 정보를 불러오는데 실패했습니다.');
+        setDocuments([]);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -238,55 +243,51 @@ const EmployeeDetail: React.FC = () => {
         updateData.daily_contract_hours = null;
       }
       
-      const response = await employeeAPI.update(parseInt(id), updateData);
+      await employeeAPI.update(parseInt(id), updateData);
 
+      const uploadTasks: Promise<unknown>[] = [];
       if (healthCertFile && healthCertIssueDate) {
         const healthCertFormData = new FormData();
         healthCertFormData.append('file', healthCertFile);
         healthCertFormData.append('issue_date', healthCertIssueDate);
-        
         const issueDateObj = new Date(healthCertIssueDate);
         issueDateObj.setFullYear(issueDateObj.getFullYear() + 1);
         const calculatedExpiryDate = issueDateObj.toISOString().split('T')[0];
         healthCertFormData.append('expiry_date', calculatedExpiryDate);
-
-        try {
-          const uploadParams: any = {
-            employee_id: parseInt(id),
-            document_type: '보건증',
-            issue_date: healthCertIssueDate,
-            expiry_date: calculatedExpiryDate,
-          };
-          
-          await documentAPI.upload(healthCertFormData, uploadParams);
-        } catch (err: any) {
-          console.error('보건증 업로드 실패:', err);
-        }
+        const uploadParams: Record<string, unknown> = {
+          employee_id: parseInt(id, 10),
+          document_type: '보건증',
+          issue_date: healthCertIssueDate,
+          expiry_date: calculatedExpiryDate,
+        };
+        uploadTasks.push(
+          documentAPI.upload(healthCertFormData, uploadParams).catch((err: unknown) => {
+            console.error('보건증 업로드 실패:', err);
+          }),
+        );
       }
-
       if (contractFile) {
         const contractFormData = new FormData();
         contractFormData.append('file', contractFile);
-        
-        try {
-          const uploadParams: any = {
-            employee_id: parseInt(id),
-            document_type: '근로계약서',
-          };
-          if (contractIssueDate) uploadParams.issue_date = contractIssueDate;
-          
-          await documentAPI.upload(contractFormData, uploadParams);
-        } catch (err: any) {
-          console.error('근로계약서 업로드 실패:', err);
-        }
+        const uploadParams: Record<string, unknown> = {
+          employee_id: parseInt(id, 10),
+          document_type: '근로계약서',
+        };
+        if (contractIssueDate) uploadParams.issue_date = contractIssueDate;
+        uploadTasks.push(
+          documentAPI.upload(contractFormData, uploadParams).catch((err: unknown) => {
+            console.error('근로계약서 업로드 실패:', err);
+          }),
+        );
       }
+      if (uploadTasks.length > 0) await Promise.all(uploadTasks);
 
       setHealthCertFile(null);
       setHealthCertIssueDate('');
       setContractFile(null);
       setContractIssueDate('');
-      
-      await loadEmployeePage(parseInt(id, 10));
+
+      await loadEmployeePage(parseInt(id, 10), { silent: true });
       
       setIsEditing(false);
       alert('직원 정보가 수정되었습니다.');

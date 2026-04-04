@@ -50,6 +50,9 @@ export function clearAccessToken(): void {
   window.localStorage.removeItem(ACCESS_TOKEN_KEY);
 }
 
+const API_DEBUG =
+  typeof process !== 'undefined' && process.env.NODE_ENV === 'development';
+
 export const apiClient = axios.create({
   baseURL: `${API_BASE_URL}/api/v1`,
   headers: {
@@ -58,7 +61,7 @@ export const apiClient = axios.create({
   timeout: 10000, // 10초 타임아웃
 });
 
-// 요청 인터셉터: Bearer + 지점 헤더 + 디버깅
+// 요청 인터셉터: Bearer + 지점 헤더 (개발 시에만 요청/응답 콘솔 — 저장·조회 시 메인 스레드 부담 감소)
 apiClient.interceptors.request.use(
   (config) => {
     config.headers = config.headers ?? {};
@@ -68,7 +71,9 @@ apiClient.interceptors.request.use(
     }
     const sid = getSelectedStoreId();
     (config.headers as Record<string, string>)['X-Store-Id'] = String(sid);
-    console.log('API Request:', config.method?.toUpperCase(), config.url, '[store', sid, ']');
+    if (API_DEBUG) {
+      console.log('API Request:', config.method?.toUpperCase(), config.url, '[store', sid, ']');
+    }
     return config;
   },
   (error) => {
@@ -77,16 +82,17 @@ apiClient.interceptors.request.use(
   }
 );
 
-// 응답 인터셉터 (디버깅용)
+// 응답 인터셉터
 apiClient.interceptors.response.use(
   (response) => {
-    console.log('API Response:', response.status, response.config.url);
-    // /employees 엔드포인트인 경우 응답 데이터 상세 로깅
-    if (response.config.url?.includes('/employees') && response.data) {
-      console.log('직원 API 원본 응답 데이터:', response.data);
-      if (Array.isArray(response.data) && response.data.length > 0) {
-        console.log('첫 번째 직원의 모든 키:', Object.keys(response.data[0]));
-        console.log('첫 번째 직원의 모든 값:', response.data[0]);
+    if (API_DEBUG) {
+      console.log('API Response:', response.status, response.config.url);
+      if (response.config.url?.includes('/employees') && response.data) {
+        console.log('직원 API 원본 응답 데이터:', response.data);
+        if (Array.isArray(response.data) && response.data.length > 0) {
+          console.log('첫 번째 직원의 모든 키:', Object.keys(response.data[0]));
+          console.log('첫 번째 직원의 모든 값:', response.data[0]);
+        }
       }
     }
     return response;
