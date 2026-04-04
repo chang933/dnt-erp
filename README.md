@@ -126,7 +126,8 @@ git push origin main
    - `ENVIRONMENT` — `production`
    - `BOOTSTRAP_ADMIN_USERNAME` / `BOOTSTRAP_ADMIN_PASSWORD` — 최초 어드민(선택)
    - `CORS_ORIGINS` — 프론트 URL(예: `https://xxx.vercel.app`) — 쉼표로 여러 개 가능
-4. 배포 URL이 나오면(예: `https://dnt-erp-api.onrender.com`) 헬스 확인: `GET /health`
+4. 배포 URL이 나오면(예: `https://dnt-erp.onrender.com`) 헬스 확인: `GET /health`
+5. **로그인 404 시**: Render가 예전 커밋을 서빙 중입니다. 대시보드에서 **Manual Deploy → Deploy latest commit** 으로 최신 `main`을 올리세요. 배포 후 브라우저에서 `https://(서비스URL)/openapi.json` 을 열어 `"\/api\/v1\/auth\/login"` 경로가 있는지 확인합니다.
 
 ### 3) 프론트엔드 — Vercel
 

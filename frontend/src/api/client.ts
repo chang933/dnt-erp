@@ -1,6 +1,20 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8001';
+/**
+ * REACT_APP_API_BASE_URL 은 API 호스트만 넣으세요 (예: https://dnt-erp.onrender.com).
+ * 실수로 .../api/v1 까지 넣은 경우 여기서 제거해 이중 경로를 막습니다.
+ */
+function normalizeApiOrigin(raw: string): string {
+  let s = raw.trim().replace(/\/+$/, '');
+  while (s.toLowerCase().endsWith('/api/v1')) {
+    s = s.slice(0, -'/api/v1'.length).replace(/\/+$/, '');
+  }
+  return s;
+}
+
+const API_BASE_URL = normalizeApiOrigin(
+  process.env.REACT_APP_API_BASE_URL || 'http://localhost:8001'
+);
 
 /** 브라우저에 저장되는 현재 지점 ID (백엔드 X-Store-Id) */
 export const SELECTED_STORE_ID_KEY = 'dnt_erp_selected_store_id';
@@ -83,7 +97,7 @@ apiClient.interceptors.response.use(
     const url = String(error.config?.url ?? '');
     if (
       status === 401 &&
-      !url.includes('/auth/login') &&
+      !url.includes('auth/login') &&
       typeof window !== 'undefined'
     ) {
       clearAccessToken();

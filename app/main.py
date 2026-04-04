@@ -105,19 +105,31 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 def _seed_bootstrap_admin() -> None:
-    """환경변수로 최초 어드민 계정 생성 (미설정 시 스킵)"""
+    """
+    환경변수로 어드민 계정 생성 또는 비밀번호·권한 동기화 (미설정 시 스킵).
+    이미 같은 아이디가 있으면 비밀번호를 env 값으로 다시 맞춤 — 로그인 불가 시 재기동만으로 복구 가능.
+    """
     from app.db.session import SessionLocal
     from app.crud import user as user_crud
+    from app.core.security import get_password_hash
+
     if not settings.bootstrap_admin_username or not settings.bootstrap_admin_password:
         return
+    name = settings.bootstrap_admin_username.strip()
+    pwd = settings.bootstrap_admin_password
     db = SessionLocal()
     try:
-        if user_crud.get_user_by_username(db, settings.bootstrap_admin_username):
+        existing = user_crud.get_user_by_username(db, name)
+        if existing:
+            existing.password_hash = get_password_hash(pwd)
+            existing.is_active = True
+            existing.is_admin = True
+            db.commit()
             return
         user_crud.create_user(
             db,
-            username=settings.bootstrap_admin_username,
-            password=settings.bootstrap_admin_password,
+            username=name,
+            password=pwd,
             is_admin=True,
         )
     finally:
