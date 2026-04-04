@@ -272,22 +272,7 @@ const RevenueExpenseList: React.FC = () => {
       deliveryCategories.forEach(cat => {
         revenueKeys[`배달매출_${cat}`] = '';
       });
-      listData.forEach((item: RevenueExpense) => {
-        if (item.type === '홀매출_주간' || item.type === '홀매출_야간') {
-          if (item.memo === '식권대장') {
-            const cur = Number(revenueKeys['홀매출_식권대장'] || 0) || 0;
-            revenueKeys['홀매출_식권대장'] = String(cur + Number(item.amount));
-          } else {
-            const cur = Number(revenueKeys['홀매출'] || 0) || 0;
-            revenueKeys['홀매출'] = String(cur + Number(item.amount));
-          }
-        }
-        if (item.type === '배달매출_주간' || item.type === '배달매출_야간') {
-          const k = `배달매출_${item.memo || '기타'}`;
-          const cur = Number(revenueKeys[k] || 0) || 0;
-          revenueKeys[k] = String(cur + Number(item.amount));
-        }
-      });
+      // 매출 입력란: 당일 합계를 넣지 않음(건별 추가 저장 — 입력란에는 이번에 더할 금액만)
       const depositKeys: Record<string, string> = {};
       DISPLAY_REVENUE_TYPES.forEach(type => {
         depositKeys[type] = '';
@@ -295,17 +280,7 @@ const RevenueExpenseList: React.FC = () => {
       deliveryCategories.forEach(cat => {
         depositKeys[`배달매출_${cat}`] = '';
       });
-      listData.forEach((item: RevenueExpense) => {
-        if (item.type === '홀매출_실입금') {
-          const cur = Number(depositKeys['홀매출'] || 0) || 0;
-          depositKeys['홀매출'] = String(cur + Number(item.amount));
-        }
-        if (item.type === '배달매출_실입금') {
-          const k = `배달매출_${item.memo || '기타'}`;
-          const cur = Number(depositKeys[k] || 0) || 0;
-          depositKeys[k] = String(cur + Number(item.amount));
-        }
-      });
+      // 실입금 입력란: 당일 합계 미표시(건별 추가 저장)
       EXPENSE_TYPES.forEach(type => {
         expenseKeys[type] = '';
       });
@@ -464,15 +439,6 @@ const RevenueExpenseList: React.FC = () => {
     const backendType: RevenueExpenseType = displayType === '홀매출' ? '홀매출_실입금' : '배달매출_실입금';
 
     try {
-      if (displayType === '홀매출') {
-        const toDelete = revenueExpenses.filter((r: RevenueExpense) => r.type === '홀매출_실입금');
-        for (const r of toDelete) await revenueExpenseAPI.delete(r.id);
-      } else if (displayType === '배달매출' && category) {
-        const toDelete = revenueExpenses.filter(
-          (r: RevenueExpense) => r.type === '배달매출_실입금' && (r.memo || '') === category
-        );
-        for (const r of toDelete) await revenueExpenseAPI.delete(r.id);
-      }
       const data: RevenueExpenseCreate = {
         date: selectedDate,
         type: backendType,
@@ -499,25 +465,6 @@ const RevenueExpenseList: React.FC = () => {
     const memo = memoOverride !== undefined ? memoOverride : (category || '');
 
     try {
-      if (displayType === '홀매출') {
-        const toDelete = revenueExpenses.filter(
-          (r: RevenueExpense) =>
-            (r.type === '홀매출_주간' || r.type === '홀매출_야간') && (r.memo || '') === ''
-        );
-        for (const r of toDelete) await revenueExpenseAPI.delete(r.id);
-      } else if (displayType === '홀매출_식권대장') {
-        const toDelete = revenueExpenses.filter(
-          (r: RevenueExpense) =>
-            (r.type === '홀매출_주간' || r.type === '홀매출_야간') && (r.memo || '') === '식권대장'
-        );
-        for (const r of toDelete) await revenueExpenseAPI.delete(r.id);
-      } else if (displayType === '배달매출' && category) {
-        const toDelete = revenueExpenses.filter(
-          (r: RevenueExpense) =>
-            (r.type === '배달매출_주간' || r.type === '배달매출_야간') && (r.memo || '') === category
-        );
-        for (const r of toDelete) await revenueExpenseAPI.delete(r.id);
-      }
       const data: RevenueExpenseCreate = {
         date: selectedDate,
         type: backendType,
@@ -634,6 +581,9 @@ const RevenueExpenseList: React.FC = () => {
         <div className="card-header">
           <h2 className="card-title">당일 매출/지출관리</h2>
         </div>
+        <p style={{ margin: '0 0 1rem 0', fontSize: '0.85rem', color: '#64748b' }}>
+          매출·실입금·지출 금액란에는 <strong>합계가 아니라 이번에 더할 금액</strong>만 입력한 뒤 저장하세요. 여러 번 저장하면 건별로 쌓이며, 아래 입력 내역에서 개별 삭제할 수 있습니다.
+        </p>
 
         <div style={{
           marginBottom: '1.5rem',
