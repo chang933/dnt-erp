@@ -5,34 +5,41 @@ from app.models.employee import Employee, EmployeeStatus
 from app.schemas.employee import EmployeeCreate, EmployeeUpdate
 
 
-def get_employee(db: Session, employee_id: int) -> Optional[Employee]:
+def get_employee(db: Session, employee_id: int, store_id: int) -> Optional[Employee]:
     """직원 ID로 직원 조회"""
-    return db.query(Employee).filter(Employee.id == employee_id).first()
+    return (
+        db.query(Employee)
+        .filter(Employee.id == employee_id, Employee.store_id == store_id)
+        .first()
+    )
 
 
 def get_employees(
     db: Session,
+    store_id: int,
     skip: int = 0,
     limit: int = 100,
-    status: Optional[EmployeeStatus] = None
+    status: Optional[EmployeeStatus] = None,
 ) -> List[Employee]:
     """직원 목록 조회 (페이징 지원)"""
-    query = db.query(Employee)
-    
+    query = db.query(Employee).filter(Employee.store_id == store_id)
+
     if status:
         query = query.filter(Employee.status == status)
-    
+
     return query.order_by(desc(Employee.created_at)).offset(skip).limit(limit).all()
 
 
 def create_employee(
     db: Session,
+    store_id: int,
     employee: EmployeeCreate,
     ssn_override: Optional[str] = None,
 ) -> Employee:
     """새 직원 생성 (ssn_override 있으면 주민번호로 사용)"""
     ssn_val = ssn_override if ssn_override is not None else employee.ssn
     db_employee = Employee(
+        store_id=store_id,
         name=employee.name,
         phone=employee.phone,
         address=employee.address,
@@ -64,12 +71,13 @@ def create_employee(
 
 def update_employee(
     db: Session,
+    store_id: int,
     employee_id: int,
     employee_update: EmployeeUpdate,
     ssn_override: Optional[str] = None,
 ) -> Optional[Employee]:
     """직원 정보 수정 (ssn_override 있으면 해당 값으로 주민번호 갱신)"""
-    db_employee = get_employee(db, employee_id)
+    db_employee = get_employee(db, employee_id, store_id)
     if not db_employee:
         return None
     
@@ -94,9 +102,9 @@ def update_employee(
     return db_employee
 
 
-def delete_employee(db: Session, employee_id: int) -> bool:
+def delete_employee(db: Session, store_id: int, employee_id: int) -> bool:
     """직원 삭제 (실제 삭제가 아닌 퇴사 처리)"""
-    db_employee = get_employee(db, employee_id)
+    db_employee = get_employee(db, employee_id, store_id)
     if not db_employee:
         return False
     

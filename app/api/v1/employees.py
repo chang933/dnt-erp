@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from typing import List, Optional
 from app.db.session import get_db
+from app.api.deps import get_store_id
 from app.schemas.employee import Employee, EmployeeCreate, EmployeeUpdate, EmployeeListItem
 from app.crud import employee as crud_employee
 from sqlalchemy import text
@@ -56,7 +57,8 @@ def _employee_response(db_employee, db: Session) -> dict:
 @router.post("/", status_code=201)
 async def create_employee(
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    store_id: int = Depends(get_store_id),
 ):
     """새 직원 등록 (주민번호는 본문에서 명시 추출 후 저장)"""
     body = await request.json()
@@ -70,7 +72,9 @@ async def create_employee(
     if ssn_raw is not None:
         employee.ssn = ssn_raw
     try:
-        db_employee = crud_employee.create_employee(db=db, employee=employee, ssn_override=ssn_raw)
+        db_employee = crud_employee.create_employee(
+            db=db, store_id=store_id, employee=employee, ssn_override=ssn_raw
+        )
     except (OperationalError, ProgrammingError) as e:
         _handle_db_error(e)
     logger.info("직원 등록 저장 후 ssn=%s", getattr(db_employee, "ssn", "MISSING"))
@@ -83,10 +87,13 @@ def get_employees(
     skip: int = Query(0, ge=0, description="건너뛸 레코드 수"),
     limit: int = Query(100, ge=1, le=1000, description="가져올 레코드 수"),
     status: Optional[EmployeeStatus] = Query(None, description="상태 필터 (재직/퇴사)"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    store_id: int = Depends(get_store_id),
 ):
     """직원 목록 조회 (ssn 필드 포함)"""
-    db_employees = crud_employee.get_employees(db=db, skip=skip, limit=limit, status=status)
+    db_employees = crud_employee.get_employees(
+        db=db, store_id=store_id, skip=skip, limit=limit, status=status
+    )
     payload = [_employee_response(emp, db) for emp in db_employees]
     return JSONResponse(content=payload, headers={"X-Employee-Response-Has-Ssn": "1"})
 
@@ -94,10 +101,11 @@ def get_employees(
 @router.get("/{employee_id}")
 def get_employee(
     employee_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    store_id: int = Depends(get_store_id),
 ):
     """직원 상세 조회 (ssn 필드 항상 포함)"""
-    db_employee = crud_employee.get_employee(db=db, employee_id=employee_id)
+    db_employee = crud_employee.get_employee(db=db, employee_id=employee_id, store_id=store_id)
     if db_employee is None:
         raise HTTPException(status_code=404, detail="직원을 찾을 수 없습니다")
     data = _employee_response(db_employee, db)
@@ -108,7 +116,8 @@ def get_employee(
 async def update_employee(
     employee_id: int,
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    store_id: int = Depends(get_store_id),
 ):
     """직원 정보 수정 (주민번호는 본문에서 명시 추출 후 저장)"""
     body = await request.json()
@@ -126,6 +135,7 @@ async def update_employee(
     try:
         db_employee = crud_employee.update_employee(
             db=db,
+            store_id=store_id,
             employee_id=employee_id,
             employee_update=employee_update,
             ssn_override=ssn_raw if "ssn" in body else None,
@@ -143,10 +153,11 @@ async def update_employee(
 @router.delete("/{employee_id}", status_code=204)
 def delete_employee(
     employee_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    store_id: int = Depends(get_store_id),
 ):
     """직원 퇴사 처리"""
-    success = crud_employee.delete_employee(db=db, employee_id=employee_id)
+    success = crud_employee.delete_employee(db=db, store_id=store_id, employee_id=employee_id)
     if not success:
         raise HTTPException(status_code=404, detail="직원을 찾을 수 없습니다")
     return None

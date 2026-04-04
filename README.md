@@ -70,12 +70,14 @@ pip install -r requirements.txt
 
 ### 3. 환경 변수 설정
 
-`.env` 파일을 생성하고 다음 내용을 추가:
+`.env` 파일을 생성하고 `.env.example`을 참고해 값을 넣습니다. (DB 비밀번호·SECRET_KEY는 저장소에 올리지 마세요.)
 
 ```env
-DATABASE_URL=postgresql+psycopg2://postgres:wnsrb09280113@db.ibwfqdaahtbwfjznawqx.supabase.co:5432/postgres
+DATABASE_URL=postgresql+psycopg2://postgres:[PASSWORD]@db.[PROJECT].supabase.co:5432/postgres
 SECRET_KEY=your-secret-key
 ENVIRONMENT=development
+BOOTSTRAP_ADMIN_USERNAME=admin
+BOOTSTRAP_ADMIN_PASSWORD=your-initial-password
 ```
 
 ### 4. 테이블 생성
@@ -101,6 +103,44 @@ python -m uvicorn app.main:app --reload
 서버는 `http://localhost:8000`에서 실행됩니다.
 
 API 문서는 `http://localhost:8000/docs`에서 확인할 수 있습니다.
+
+## 배포 (GitHub + Render API + Vercel 프론트)
+
+### 1) GitHub
+
+```bash
+git add -A
+git commit -m "feat: multi-store, auth, admin stores, deploy config"
+git push origin main
+```
+
+### 2) 백엔드 API — Render
+
+1. [Render](https://render.com) → **New** → **Blueprint** → 이 저장소 연결 후 `render.yaml` 적용  
+   또는 **Web Service**로 Python 앱 추가 (Root: 저장소 루트).
+2. **Build**: `pip install -r requirements.txt`  
+   **Start**: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+3. **Environment**에 설정:
+   - `DATABASE_URL` — Supabase 연결 문자열
+   - `SECRET_KEY` — 긴 랜덤 문자열
+   - `ENVIRONMENT` — `production`
+   - `BOOTSTRAP_ADMIN_USERNAME` / `BOOTSTRAP_ADMIN_PASSWORD` — 최초 어드민(선택)
+   - `CORS_ORIGINS` — 프론트 URL(예: `https://xxx.vercel.app`) — 쉼표로 여러 개 가능
+4. 배포 URL이 나오면(예: `https://dnt-erp-api.onrender.com`) 헬스 확인: `GET /health`
+
+### 3) 프론트엔드 — Vercel
+
+1. [Vercel](https://vercel.com) → **Add New Project** → 같은 GitHub 저장소 선택  
+2. **Root Directory**를 `frontend`로 지정  
+3. **Environment Variables**: `REACT_APP_API_BASE_URL` = Render API URL (예: `https://dnt-erp-api.onrender.com`, 끝에 `/api` 없음)  
+4. 배포 후 Render 쪽 `CORS_ORIGINS`에 Vercel 도메인을 추가하고 API를 재배포
+
+### Docker (선택)
+
+```bash
+docker build -t dnt-erp-api .
+docker run -e DATABASE_URL=... -e SECRET_KEY=... -e PORT=8000 -p 8000:8000 dnt-erp-api
+```
 
 ## 프로젝트 구조
 

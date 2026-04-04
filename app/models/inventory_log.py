@@ -12,6 +12,7 @@ class InventoryLog(Base):
     __tablename__ = "erp_inventory_log"
     
     id = Column(Integer, primary_key=True, index=True)
+    store_id = Column(Integer, ForeignKey("erp_stores.id"), nullable=False, index=True, server_default="1")
     ingredient_id = Column(Integer, ForeignKey("erp_ingredients.id"), nullable=False, index=True)
     log_type = Column(SQLEnum(InventoryLogType, native_enum=False), nullable=False, name="type")  # 입고/출고
     quantity = Column(Numeric(10, 2), nullable=False)  # 수량

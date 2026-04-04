@@ -1,5 +1,4 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
 from typing import List, Optional
 from datetime import date
 from app.models.food_cost import FoodCost
@@ -9,6 +8,7 @@ from app.crud import kitchen_expense_sync
 
 def get_food_costs(
     db: Session,
+    store_id: int,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     supplier: Optional[str] = None,
@@ -16,7 +16,7 @@ def get_food_costs(
     skip: int = 0,
     limit: int = 500,
 ) -> List[FoodCost]:
-    query = db.query(FoodCost)
+    query = db.query(FoodCost).filter(FoodCost.store_id == store_id)
     if start_date:
         query = query.filter(FoodCost.date >= start_date)
     if end_date:
@@ -28,23 +28,27 @@ def get_food_costs(
     return query.order_by(FoodCost.date, FoodCost.id).offset(skip).limit(limit).all()
 
 
-def get_food_cost(db: Session, food_cost_id: int) -> Optional[FoodCost]:
-    return db.query(FoodCost).filter(FoodCost.id == food_cost_id).first()
+def get_food_cost(db: Session, store_id: int, food_cost_id: int) -> Optional[FoodCost]:
+    return (
+        db.query(FoodCost)
+        .filter(FoodCost.id == food_cost_id, FoodCost.store_id == store_id)
+        .first()
+    )
 
 
-def create_food_cost(db: Session, food_cost: FoodCostCreate) -> FoodCost:
-    db_obj = FoodCost(**food_cost.model_dump())
+def create_food_cost(db: Session, store_id: int, food_cost: FoodCostCreate) -> FoodCost:
+    db_obj = FoodCost(store_id=store_id, **food_cost.model_dump())
     db.add(db_obj)
     db.commit()
     db.refresh(db_obj)
-    kitchen_expense_sync.sync_kitchen_expense_for_date(db, db_obj.date)
+    kitchen_expense_sync.sync_kitchen_expense_for_date(db, store_id, db_obj.date)
     return db_obj
 
 
 def update_food_cost(
-    db: Session, food_cost_id: int, update: FoodCostUpdate
+    db: Session, store_id: int, food_cost_id: int, update: FoodCostUpdate
 ) -> Optional[FoodCost]:
-    db_obj = get_food_cost(db, food_cost_id)
+    db_obj = get_food_cost(db, store_id, food_cost_id)
     if not db_obj:
         return None
     for field, value in update.model_dump(exclude_unset=True).items():
@@ -52,16 +56,16 @@ def update_food_cost(
     synced_date = db_obj.date
     db.commit()
     db.refresh(db_obj)
-    kitchen_expense_sync.sync_kitchen_expense_for_date(db, synced_date)
+    kitchen_expense_sync.sync_kitchen_expense_for_date(db, store_id, synced_date)
     return db_obj
 
 
-def delete_food_cost(db: Session, food_cost_id: int) -> bool:
-    db_obj = get_food_cost(db, food_cost_id)
+def delete_food_cost(db: Session, store_id: int, food_cost_id: int) -> bool:
+    db_obj = get_food_cost(db, store_id, food_cost_id)
     if not db_obj:
         return False
     synced_date = db_obj.date
     db.delete(db_obj)
     db.commit()
-    kitchen_expense_sync.sync_kitchen_expense_for_date(db, synced_date)
+    kitchen_expense_sync.sync_kitchen_expense_for_date(db, store_id, synced_date)
     return True

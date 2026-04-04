@@ -18,6 +18,7 @@ class FoodCostUpdate(BaseModel):
 
 class FoodCost(BaseModel):
     id: int
+    store_id: int = 1
     date: date
     supplier: str
     record_type: str

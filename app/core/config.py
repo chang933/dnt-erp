@@ -6,10 +6,13 @@ class Settings(BaseSettings):
     # 형식: postgresql+psycopg2://postgres:[PASSWORD]@db.hetmepmsejcdwcxysezk.supabase.co:5432/postgres
     database_url: str = "postgresql+psycopg2://postgres:[PASSWORD]@db.[PROJECT].supabase.co:5432/postgres"
     
-    # Security
+    # Security (운영에서는 SECRET_KEY를 강한 랜덤 문자열로 설정)
     secret_key: str = "dnt-erp-secret-key-change-in-production"
     access_token_expire_minutes: int = 1440
-    
+    # 최초 기동 시 어드민 1명 자동 생성 (둘 다 설정된 경우에만, 이미 있으면 스킵)
+    bootstrap_admin_username: str | None = None
+    bootstrap_admin_password: str | None = None
+
     # Environment
     environment: str = "development"
     

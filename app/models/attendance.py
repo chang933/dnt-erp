@@ -13,6 +13,7 @@ class Attendance(Base):
     __tablename__ = "erp_attendance"
     
     id = Column(Integer, primary_key=True, index=True)
+    store_id = Column(Integer, ForeignKey("erp_stores.id"), nullable=False, index=True, server_default="1")
     employee_id = Column(Integer, ForeignKey("erp_employees.id"), nullable=False, index=True)
     date = Column(Date, nullable=False, index=True)
     check_in = Column(DateTime, nullable=True)  # 출근 시간

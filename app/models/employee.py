@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Date, DateTime, Enum as SQLEnum, Numeric
+from sqlalchemy import Column, Integer, String, Date, DateTime, Enum as SQLEnum, Numeric, ForeignKey
 from sqlalchemy.orm import relationship
 from app.db.base import Base
 from datetime import datetime
@@ -33,6 +33,7 @@ class Employee(Base):
     __tablename__ = "erp_employees"
     
     id = Column(Integer, primary_key=True, index=True)
+    store_id = Column(Integer, ForeignKey("erp_stores.id"), nullable=False, index=True, server_default="1")
     name = Column(String(100), nullable=False, index=True)
     phone = Column(String(20))
     address = Column(String(200))

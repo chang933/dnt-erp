@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Date, DateTime, Enum as SQLEnum, Numeric, Text
+from sqlalchemy import Column, Integer, String, Date, DateTime, Enum as SQLEnum, Numeric, Text, ForeignKey
 from app.db.base import Base
 from datetime import datetime
 import enum
@@ -29,6 +29,7 @@ class RevenueExpense(Base):
     __tablename__ = "erp_revenue_expense"
     
     id = Column(Integer, primary_key=True, index=True)
+    store_id = Column(Integer, ForeignKey("erp_stores.id"), nullable=False, index=True, server_default="1")
     date = Column(Date, nullable=False, index=True)
     type = Column(SQLEnum(RevenueExpenseType, native_enum=False), nullable=False)
     amount = Column(Numeric(12, 2), nullable=False)

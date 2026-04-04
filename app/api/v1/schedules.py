@@ -4,6 +4,7 @@ from sqlalchemy import extract
 from typing import List, Optional, Any
 from datetime import date
 from app.db.session import get_db
+from app.api.deps import get_store_id
 from app.schemas.schedule import Schedule, ScheduleCreate, ScheduleUpdate, ScheduleWithEmployee
 from app.crud import schedule as crud_schedule
 from app.models.employee import Employee
@@ -23,7 +24,8 @@ def _parse_date_safe(value: Any) -> date:
 @router.post("/", response_model=Schedule, status_code=201)
 async def create_schedule(
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    store_id: int = Depends(get_store_id),
 ):
     """새 스케줄 등록 (날짜는 반드시 YYYY-MM-DD만 사용)"""
     body = await request.json()
@@ -42,10 +44,14 @@ async def create_schedule(
         work_position=body.get("work_position"),
         extra_hours=body.get("extra_hours"),
     )
-    employee = db.query(Employee).filter(Employee.id == schedule.employee_id).first()
+    employee = (
+        db.query(Employee)
+        .filter(Employee.id == schedule.employee_id, Employee.store_id == store_id)
+        .first()
+    )
     if not employee:
         raise HTTPException(status_code=404, detail="직원을 찾을 수 없습니다")
-    return crud_schedule.create_schedule(db=db, schedule=schedule)
+    return crud_schedule.create_schedule(db=db, store_id=store_id, schedule=schedule)
 
 
 @router.get("/", response_model=List[Schedule])
@@ -55,26 +61,31 @@ def get_schedules(
     end_date: Optional[date] = Query(None, description="종료 날짜"),
     year: Optional[int] = Query(None, ge=2000, le=2100, description="년도"),
     month: Optional[int] = Query(None, ge=1, le=12, description="월"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    store_id: int = Depends(get_store_id),
 ):
     """스케줄 목록 조회"""
     if employee_id:
         # 특정 직원의 스케줄 조회
         schedules = crud_schedule.get_schedules_by_employee(
             db=db,
+            store_id=store_id,
             employee_id=employee_id,
             start_date=start_date,
-            end_date=end_date
+            end_date=end_date,
         )
     elif year and month:
         # 특정 월의 모든 스케줄 조회
-        schedules = crud_schedule.get_schedules_by_month(db=db, year=year, month=month)
+        schedules = crud_schedule.get_schedules_by_month(
+            db=db, store_id=store_id, year=year, month=month
+        )
     elif start_date and end_date:
         # 날짜 범위로 조회
         schedules = crud_schedule.get_schedules_by_date_range(
             db=db,
+            store_id=store_id,
             start_date=start_date,
-            end_date=end_date
+            end_date=end_date,
         )
     else:
         raise HTTPException(
@@ -89,7 +100,8 @@ def get_schedules(
 def get_schedules_by_month_with_employee(
     year: int,
     month: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    store_id: int = Depends(get_store_id),
 ):
     """특정 월의 모든 스케줄 조회 (직원 정보 포함)"""
     from sqlalchemy.orm import joinedload
@@ -99,6 +111,7 @@ def get_schedules_by_month_with_employee(
     schedules = db.query(ScheduleModel).options(
         joinedload(ScheduleModel.employee)
     ).filter(
+        ScheduleModel.store_id == store_id,
         extract('year', ScheduleModel.date) == year,
         extract('month', ScheduleModel.date) == month
     ).order_by(ScheduleModel.date, ScheduleModel.employee_id).all()
@@ -129,10 +142,11 @@ def get_schedules_by_month_with_employee(
 @router.get("/{schedule_id}", response_model=Schedule)
 def get_schedule(
     schedule_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    store_id: int = Depends(get_store_id),
 ):
     """스케줄 상세 조회"""
-    db_schedule = crud_schedule.get_schedule(db=db, schedule_id=schedule_id)
+    db_schedule = crud_schedule.get_schedule(db=db, schedule_id=schedule_id, store_id=store_id)
     if db_schedule is None:
         raise HTTPException(status_code=404, detail="스케줄을 찾을 수 없습니다")
     return db_schedule
@@ -142,11 +156,13 @@ def get_schedule(
 def update_schedule(
     schedule_id: int,
     schedule_update: ScheduleUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    store_id: int = Depends(get_store_id),
 ):
     """스케줄 수정"""
     db_schedule = crud_schedule.update_schedule(
         db=db,
+        store_id=store_id,
         schedule_id=schedule_id,
         schedule_update=schedule_update
     )
@@ -158,10 +174,11 @@ def update_schedule(
 @router.delete("/{schedule_id}", status_code=204)
 def delete_schedule(
     schedule_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    store_id: int = Depends(get_store_id),
 ):
     """스케줄 삭제"""
-    success = crud_schedule.delete_schedule(db=db, schedule_id=schedule_id)
+    success = crud_schedule.delete_schedule(db=db, store_id=store_id, schedule_id=schedule_id)
     if not success:
         raise HTTPException(status_code=404, detail="스케줄을 찾을 수 없습니다")
     return None

@@ -2,6 +2,40 @@ import axios from 'axios';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8001';
 
+/** 브라우저에 저장되는 현재 지점 ID (백엔드 X-Store-Id) */
+export const SELECTED_STORE_ID_KEY = 'dnt_erp_selected_store_id';
+
+export function getSelectedStoreId(): number {
+  if (typeof window === 'undefined') return 1;
+  const raw = window.localStorage.getItem(SELECTED_STORE_ID_KEY);
+  const n = raw != null ? parseInt(raw, 10) : NaN;
+  return Number.isFinite(n) && n >= 1 ? n : 1;
+}
+
+export function setSelectedStoreId(id: number): void {
+  if (typeof window === 'undefined') return;
+  if (!Number.isFinite(id) || id < 1) return;
+  window.localStorage.setItem(SELECTED_STORE_ID_KEY, String(id));
+}
+
+/** JWT (Bearer) */
+export const ACCESS_TOKEN_KEY = 'dnt_erp_access_token';
+
+export function getAccessToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage.getItem(ACCESS_TOKEN_KEY);
+}
+
+export function setAccessToken(token: string): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(ACCESS_TOKEN_KEY, token);
+}
+
+export function clearAccessToken(): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.removeItem(ACCESS_TOKEN_KEY);
+}
+
 export const apiClient = axios.create({
   baseURL: `${API_BASE_URL}/api/v1`,
   headers: {
@@ -10,10 +44,17 @@ export const apiClient = axios.create({
   timeout: 10000, // 10초 타임아웃
 });
 
-// 요청 인터셉터 (디버깅용)
+// 요청 인터셉터: Bearer + 지점 헤더 + 디버깅
 apiClient.interceptors.request.use(
   (config) => {
-    console.log('API Request:', config.method?.toUpperCase(), config.url);
+    config.headers = config.headers ?? {};
+    const token = getAccessToken();
+    if (token) {
+      (config.headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
+    }
+    const sid = getSelectedStoreId();
+    (config.headers as Record<string, string>)['X-Store-Id'] = String(sid);
+    console.log('API Request:', config.method?.toUpperCase(), config.url, '[store', sid, ']');
     return config;
   },
   (error) => {
@@ -38,6 +79,18 @@ apiClient.interceptors.response.use(
   },
   (error) => {
     console.error('API Response Error:', error.response?.status, error.response?.data || error.message);
+    const status = error.response?.status;
+    const url = String(error.config?.url ?? '');
+    if (
+      status === 401 &&
+      !url.includes('/auth/login') &&
+      typeof window !== 'undefined'
+    ) {
+      clearAccessToken();
+      if (!window.location.pathname.startsWith('/login')) {
+        window.location.assign('/login');
+      }
+    }
     return Promise.reject(error);
   }
 );
@@ -173,7 +226,9 @@ export const revenueExpenseAPI = {
   delete: (id: number) => apiClient.delete(`/revenue-expense/${id}`),
   getSummary: (params?: { start_date?: string; end_date?: string }) =>
     apiClient.get('/revenue-expense/summary/stats', { params }),
-};// KDS 주문 API (메뉴입력 / 주방 KDS / 홀 서빙)
+};
+
+// KDS 주문 API (메뉴입력 / 주방 KDS / 홀 서빙)
 export const orderAPI = {
   create: (data: { table_number?: number; order_type?: string; total_amount?: number; items: any[] }) =>
     apiClient.post('/orders/', data),
@@ -184,7 +239,7 @@ export const orderAPI = {
     apiClient.get(`/orders/part/${encodeURIComponent(part)}`, { params }),
   getServingItems: () => apiClient.get('/orders/serving/items'),
   updateItemStatus: (itemId: number, params?: { status?: string; part?: string; part_state?: string }) =>
-    apiClient.patch(`/orders/items/${itemId}`, { params }),
+    apiClient.patch(`/orders/items/${itemId}`, null, { params }),
 };
 
 // 식자재 비용 API
@@ -196,4 +251,38 @@ export const foodCostAPI = {
   delete: (id: number) => apiClient.delete(`/food-costs/${id}`),
   syncKitchenExpenseRange: (params: { start_date: string; end_date: string }) =>
     apiClient.post('/food-costs/sync-kitchen-expense-range', null, { params }),
+};
+
+export interface UserMe {
+  id: number;
+  username: string;
+  is_admin: boolean;
+  is_active: boolean;
+}
+
+export const authAPI = {
+  login: (username: string, password: string) =>
+    apiClient.post<{ access_token: string; token_type: string }>('/auth/login', {
+      username,
+      password,
+    }),
+  me: () => apiClient.get<UserMe>('/auth/me'),
+};
+
+export interface StoreOut {
+  id: number;
+  name: string;
+  code?: string | null;
+  is_active: boolean;
+  created_at?: string | null;
+}
+
+/** 지점 목록·관리 (목록은 활성 지점만 쓰는 것을 권장) */
+export const storeAPI = {
+  list: (params?: { active_only?: boolean }) =>
+    apiClient.get<StoreOut[]>('/stores/', { params }),
+  create: (data: { name: string; code?: string; is_active?: boolean }) =>
+    apiClient.post<StoreOut>('/stores/', data),
+  update: (id: number, data: { name?: string; code?: string; is_active?: boolean }) =>
+    apiClient.patch<StoreOut>(`/stores/${id}`, data),
 };

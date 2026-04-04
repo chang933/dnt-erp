@@ -21,6 +21,7 @@ class ReservationUpdate(BaseModel):
 
 class Reservation(BaseModel):
     id: int
+    store_id: int = 1
     reservation_date: date
     reservation_time: Optional[time] = None
     guest_name: str

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey
 from sqlalchemy.orm import relationship
 from app.db.base import Base
 from datetime import datetime
@@ -7,6 +7,7 @@ class Customer(Base):
     __tablename__ = "erp_customers"
     
     id = Column(Integer, primary_key=True, index=True)
+    store_id = Column(Integer, ForeignKey("erp_stores.id"), nullable=False, index=True, server_default="1")
     name = Column(String(100), nullable=False, index=True)
     phone = Column(String(20), index=True)
     memo = Column(Text, nullable=True)  # 메모

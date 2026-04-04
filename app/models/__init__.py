@@ -1,4 +1,6 @@
 # Database models
+from app.models.user import User
+from app.models.store import Store
 from app.models.app_setting import AppSetting
 from app.models.employee import Employee, EmployeeStatus, Position, SalaryType
 from app.models.schedule import Schedule, ScheduleType
@@ -15,6 +17,8 @@ from app.models.reservation import Reservation
 from app.models.food_cost import FoodCost
 
 __all__ = [
+    "User",
+    "Store",
     "AppSetting",
     "Employee",
     "EmployeeStatus",

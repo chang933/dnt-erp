@@ -12,6 +12,7 @@ class Schedule(Base):
     __tablename__ = "erp_schedules"
     
     id = Column(Integer, primary_key=True, index=True)
+    store_id = Column(Integer, ForeignKey("erp_stores.id"), nullable=False, index=True, server_default="1")
     employee_id = Column(Integer, ForeignKey("erp_employees.id"), nullable=False, index=True)
     date = Column(Date, nullable=False, index=True)
     schedule_type = Column(SQLEnum(ScheduleType, native_enum=False), nullable=False, default=ScheduleType.WORK, name="type")  # 출근/휴무

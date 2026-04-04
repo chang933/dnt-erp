@@ -6,27 +6,40 @@ from app.models.reservation import Reservation
 from app.schemas.reservation import ReservationCreate, ReservationUpdate
 
 
-def get_reservation(db: Session, reservation_id: int) -> Optional[Reservation]:
-    return db.query(Reservation).filter(Reservation.id == reservation_id).first()
+def get_reservation(db: Session, reservation_id: int, store_id: int) -> Optional[Reservation]:
+    return (
+        db.query(Reservation)
+        .filter(Reservation.id == reservation_id, Reservation.store_id == store_id)
+        .first()
+    )
 
 
 def get_reservations(
     db: Session,
+    store_id: int,
     skip: int = 0,
     limit: int = 200,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
 ) -> List[Reservation]:
-    query = db.query(Reservation)
+    query = db.query(Reservation).filter(Reservation.store_id == store_id)
     if start_date:
         query = query.filter(Reservation.reservation_date >= start_date)
     if end_date:
         query = query.filter(Reservation.reservation_date <= end_date)
-    return query.order_by(desc(Reservation.reservation_date), desc(Reservation.id)).offset(skip).limit(limit).all()
+    return (
+        query.order_by(desc(Reservation.reservation_date), desc(Reservation.id))
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
 
-def create_reservation(db: Session, reservation: ReservationCreate) -> Reservation:
+def create_reservation(
+    db: Session, store_id: int, reservation: ReservationCreate
+) -> Reservation:
     db_reservation = Reservation(
+        store_id=store_id,
         reservation_date=reservation.reservation_date,
         reservation_time=reservation.reservation_time,
         guest_name=reservation.guest_name,
@@ -41,10 +54,11 @@ def create_reservation(db: Session, reservation: ReservationCreate) -> Reservati
 
 def update_reservation(
     db: Session,
+    store_id: int,
     reservation_id: int,
     reservation_update: ReservationUpdate,
 ) -> Optional[Reservation]:
-    db_reservation = get_reservation(db, reservation_id)
+    db_reservation = get_reservation(db, reservation_id, store_id)
     if not db_reservation:
         return None
     update_data = reservation_update.model_dump(exclude_unset=True)
@@ -55,8 +69,8 @@ def update_reservation(
     return db_reservation
 
 
-def delete_reservation(db: Session, reservation_id: int) -> bool:
-    db_reservation = get_reservation(db, reservation_id)
+def delete_reservation(db: Session, store_id: int, reservation_id: int) -> bool:
+    db_reservation = get_reservation(db, reservation_id, store_id)
     if not db_reservation:
         return False
     db.delete(db_reservation)

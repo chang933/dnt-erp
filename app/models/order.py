@@ -1,7 +1,7 @@
 """
 KDS 주문/주문아이템 모델 (도원반점 KDS)
 """
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, text
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, text, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from app.db.base import Base
@@ -10,9 +10,13 @@ from datetime import datetime
 
 class Order(Base):
     __tablename__ = "kds_orders"
+    __table_args__ = (
+        UniqueConstraint("store_id", "order_number", name="uq_kds_orders_store_order_number"),
+    )
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    order_number = Column(Integer, unique=True, index=True, nullable=False)  # 주문번호 (#023 등)
+    store_id = Column(Integer, ForeignKey("erp_stores.id"), nullable=False, index=True, server_default="1")
+    order_number = Column(Integer, index=True, nullable=False)  # 지점 내 주문번호 (#023 등)
     table_number = Column(Integer, nullable=True)  # 홀 테이블 번호
     order_type = Column(String(20), nullable=False, default="dine_in")  # dine_in | takeout | delivery
     status = Column(String(20), nullable=False, default="active")  # active | completed | cancelled

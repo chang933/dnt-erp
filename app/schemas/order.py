@@ -61,6 +61,7 @@ class OrderUpdate(BaseModel):
 
 class Order(OrderBase):
     id: int
+    store_id: int = 1
     order_number: int
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

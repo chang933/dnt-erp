@@ -12,6 +12,7 @@ class Document(Base):
     __tablename__ = "erp_documents"
     
     id = Column(Integer, primary_key=True, index=True)
+    store_id = Column(Integer, ForeignKey("erp_stores.id"), nullable=False, index=True, server_default="1")
     employee_id = Column(Integer, ForeignKey("erp_employees.id"), nullable=False, index=True)
     document_type = Column(SQLEnum(DocumentType, native_enum=False), nullable=False, name="type")  # 보건증/근로계약서
     file_url = Column(String(500), nullable=False)  # 파일 경로 (Supabase Storage 또는 로컬)

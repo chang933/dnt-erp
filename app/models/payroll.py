@@ -7,6 +7,7 @@ class Payroll(Base):
     __tablename__ = "erp_payroll"
     
     id = Column(Integer, primary_key=True, index=True)
+    store_id = Column(Integer, ForeignKey("erp_stores.id"), nullable=False, index=True, server_default="1")
     employee_id = Column(Integer, ForeignKey("erp_employees.id"), nullable=False, index=True)
     year_month = Column(String(7), nullable=False, index=True)  # YYYY-MM 형식
     work_hours = Column(Numeric(10, 2), nullable=False, default=0)  # 근무시간

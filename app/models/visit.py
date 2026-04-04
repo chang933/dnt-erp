@@ -7,6 +7,7 @@ class Visit(Base):
     __tablename__ = "erp_visits"
     
     id = Column(Integer, primary_key=True, index=True)
+    store_id = Column(Integer, ForeignKey("erp_stores.id"), nullable=False, index=True, server_default="1")
     customer_id = Column(Integer, ForeignKey("erp_customers.id"), nullable=False, index=True)
     date = Column(DateTime, nullable=False, index=True, default=datetime.utcnow)
     memo = Column(Text, nullable=True)  # 방문 메모
