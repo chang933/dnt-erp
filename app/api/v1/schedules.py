@@ -5,7 +5,13 @@ from datetime import date
 from calendar import monthrange
 from app.db.session import get_db
 from app.api.deps import get_store_id
-from app.schemas.schedule import Schedule, ScheduleCreate, ScheduleUpdate, ScheduleWithEmployee
+from app.schemas.schedule import (
+    Schedule,
+    ScheduleCreate,
+    ScheduleUpdate,
+    ScheduleWithEmployee,
+    ScheduleWeekBatchCreate,
+)
 from app.crud import schedule as crud_schedule
 from app.models.employee import Employee
 from app.models.schedule import ScheduleType
@@ -52,6 +58,25 @@ async def create_schedule(
     if not employee:
         raise HTTPException(status_code=404, detail="직원을 찾을 수 없습니다")
     return crud_schedule.create_schedule(db=db, store_id=store_id, schedule=schedule)
+
+
+@router.post("/week-batch", response_model=List[Schedule])
+def batch_week_schedules(
+    body: ScheduleWeekBatchCreate,
+    db: Session = Depends(get_db),
+    store_id: int = Depends(get_store_id),
+):
+    """한 직원의 주간 스케줄을 한 번에 저장 (동시 POST 여러 건으로 인한 DB 연결 오류 방지)"""
+    days_data = [(d.date, d.schedule_type, d.extra_hours) for d in body.days]
+    rows = crud_schedule.batch_upsert_employee_week(
+        db=db,
+        store_id=store_id,
+        employee_id=body.employee_id,
+        days_data=days_data,
+    )
+    if rows is None:
+        raise HTTPException(status_code=404, detail="직원을 찾을 수 없습니다")
+    return rows
 
 
 @router.get("/", response_model=List[Schedule])

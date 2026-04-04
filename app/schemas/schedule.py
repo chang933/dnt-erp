@@ -77,3 +77,23 @@ class ScheduleBatchCreate(BaseModel):
     month: int = Field(..., ge=1, le=12, description="월")
     schedules: list[ScheduleCreate] = Field(..., description="스케줄 목록")
 
+
+class ScheduleWeekDayItem(BaseModel):
+    """주간 저장: 하루 한 줄 (프론트 주간 스케줄과 동일)"""
+
+    date: date = Field(..., description="YYYY-MM-DD")
+    schedule_type: str = Field("출근", description="출근 또는 휴무")
+    extra_hours: Optional[float] = Field(None, ge=0, description="출근일 추가 근무 시간")
+
+    @field_validator("date", mode="before")
+    @classmethod
+    def parse_day_date(cls, v: Union[date, str]) -> date:
+        return _parse_date_only(v)
+
+
+class ScheduleWeekBatchCreate(BaseModel):
+    """한 직원의 주(여러 날짜) 스케줄을 한 트랜잭션으로 저장 (동시 POST로 DB 풀 오류 방지)"""
+
+    employee_id: int = Field(..., description="직원 ID")
+    days: list[ScheduleWeekDayItem] = Field(..., min_length=1, description="날짜별 스케줄")
+

@@ -1,9 +1,12 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from datetime import date
 from calendar import monthrange
-from app.models.schedule import Schedule
+from decimal import Decimal
+
+from app.models.employee import Employee
+from app.models.schedule import Schedule, ScheduleType as ScheduleTypeEnum
 from app.schemas.schedule import ScheduleCreate, ScheduleUpdate
 
 
@@ -157,4 +160,68 @@ def create_schedules_batch(
         schedule = create_schedule(db, store_id, schedule_data)
         created_schedules.append(schedule)
     return created_schedules
+
+
+def batch_upsert_employee_week(
+    db: Session,
+    store_id: int,
+    employee_id: int,
+    days_data: List[Tuple[date, str, Optional[float]]],
+) -> Optional[List[Schedule]]:
+    """
+    한 직원의 여러 날짜 스케줄을 단일 트랜잭션으로 upsert.
+    주간 화면에서 요일별 동시 POST 시 Supabase/풀 OperationalError를 피하기 위함.
+    """
+    employee = (
+        db.query(Employee)
+        .filter(Employee.id == employee_id, Employee.store_id == store_id)
+        .first()
+    )
+    if not employee:
+        return None
+
+    out: List[Schedule] = []
+    for schedule_date, st_raw, extra_raw in days_data:
+        st = ScheduleTypeEnum.OFF if st_raw == "휴무" else ScheduleTypeEnum.WORK
+        if st == ScheduleTypeEnum.WORK:
+            try:
+                eh = Decimal(str(extra_raw if extra_raw is not None else 0))
+            except Exception:
+                eh = Decimal("0")
+        else:
+            eh = Decimal("0")
+
+        existing = (
+            db.query(Schedule)
+            .filter(
+                and_(
+                    Schedule.store_id == store_id,
+                    Schedule.employee_id == employee_id,
+                    Schedule.date == schedule_date,
+                )
+            )
+            .first()
+        )
+
+        if existing:
+            existing.schedule_type = st
+            existing.work_position = employee.employee_position
+            existing.extra_hours = eh
+            out.append(existing)
+        else:
+            ns = Schedule(
+                store_id=store_id,
+                employee_id=employee_id,
+                date=schedule_date,
+                schedule_type=st,
+                shift_start=None,
+                shift_end=None,
+                work_position=employee.employee_position,
+                extra_hours=eh,
+            )
+            db.add(ns)
+            out.append(ns)
+
+    db.commit()
+    return out
 

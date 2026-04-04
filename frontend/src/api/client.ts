@@ -133,6 +133,9 @@ export const scheduleAPI = {
   getAll: (params?: any) => apiClient.get('/schedules/', { params }),
   getByMonth: (year: number, month: number) =>
     apiClient.get(`/schedules/month/${year}/${month}`),
+  /** 한 직원 주간 스케줄을 한 요청·한 트랜잭션으로 저장 (동시 POST로 DB 오류 방지) */
+  saveWeekBatch: (body: { employee_id: number; days: Array<{ date: string; schedule_type: string; extra_hours?: number }> }) =>
+    apiClient.post('/schedules/week-batch', body),
   create: (data: any) => apiClient.post('/schedules/', data),
   update: (id: number, data: any) => apiClient.put(`/schedules/${id}`, data),
   delete: (id: number) => apiClient.delete(`/schedules/${id}`),

@@ -200,52 +200,29 @@ const WeeklySchedule: React.FC = () => {
         return;
       }
 
-      const errors: string[] = [];
-      const tasks = weekDates.map(({ dateStr }) => {
+      const days = weekDates.map(({ dateStr }) => {
         const isHoliday = selectedDaysForEmployee.has(dateStr);
         const addHours = (extraHours[employeeId] ?? {})[dateStr] ?? 0;
-        const scheduleData: any = {
-          employee_id: employeeId,
+        return {
           date: dateStr,
           schedule_type: isHoliday ? '휴무' : '출근',
-          work_position: employee.employee_position,
+          ...(isHoliday ? {} : { extra_hours: addHours }),
         };
-        if (!isHoliday) {
-          scheduleData.extra_hours = addHours;
-        }
-        return scheduleAPI.create(scheduleData).then(
-          () => ({ ok: true as const, dateStr }),
-          (err: any) => ({
-            ok: false as const,
-            dateStr,
-            msg: err.response?.data?.detail || err.message || '알 수 없는 오류',
-          })
-        );
-      });
-      const settled = await Promise.all(tasks);
-      let successCount = 0;
-      let failCount = 0;
-      settled.forEach((r) => {
-        if (r.ok) successCount++;
-        else {
-          failCount++;
-          errors.push(`${r.dateStr}: ${r.msg}`);
-        }
       });
 
-      if (failCount === 0) {
-        alert(`스케줄이 성공적으로 저장되었습니다.\n(저장된 항목: ${successCount}개)`);
-        await refreshSchedulesFromServer();
-      } else if (successCount > 0) {
-        alert(`일부 스케줄 저장 완료\n성공: ${successCount}개\n실패: ${failCount}개\n\n실패 상세:\n${errors.join('\n')}`);
-        await refreshSchedulesFromServer();
-      } else {
-        alert(`스케줄 저장에 실패했습니다.\n\n실패 상세:\n${errors.join('\n')}`);
-      }
+      await scheduleAPI.saveWeekBatch({ employee_id: employeeId, days });
+      alert(`스케줄이 성공적으로 저장되었습니다.\n(저장된 항목: ${days.length}개)`);
+      await refreshSchedulesFromServer();
     } catch (err: any) {
-      console.error('스케줄 저장 중 전체 오류:', err);
-      const errorDetail = err.response?.data?.detail || err.message || '알 수 없는 오류';
-      alert(`스케줄 저장 중 오류가 발생했습니다:\n${errorDetail}`);
+      console.error('스케줄 저장 오류:', err);
+      const detail = err.response?.data?.detail;
+      const msg =
+        typeof detail === 'string'
+          ? detail
+          : Array.isArray(detail)
+            ? detail.map((x: any) => x?.msg || JSON.stringify(x)).join(' ')
+            : err.message || '알 수 없는 오류';
+      alert(`스케줄 저장에 실패했습니다.\n\n${msg}`);
     }
   };
 
