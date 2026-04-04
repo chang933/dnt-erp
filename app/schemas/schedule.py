@@ -1,3 +1,4 @@
+import datetime as dt
 from pydantic import BaseModel, Field, field_serializer, field_validator
 from datetime import date, time
 from typing import Optional, Union
@@ -81,13 +82,14 @@ class ScheduleBatchCreate(BaseModel):
 class ScheduleWeekDayItem(BaseModel):
     """주간 저장: 하루 한 줄 (프론트 주간 스케줄과 동일)"""
 
-    date: date = Field(..., description="YYYY-MM-DD")
+    # 필드명이 date라 타입 힌트에 date를 쓰면 클래스 스코프에서 FieldInfo로 해석되는 오류 방지
+    date: dt.date = Field(..., description="YYYY-MM-DD")
     schedule_type: str = Field("출근", description="출근 또는 휴무")
     extra_hours: Optional[float] = Field(None, ge=0, description="출근일 추가 근무 시간")
 
     @field_validator("date", mode="before")
     @classmethod
-    def parse_day_date(cls, v: Union[date, str]) -> date:
+    def parse_day_date(cls, v: Union[dt.date, str]) -> dt.date:
         return _parse_date_only(v)
 
 
