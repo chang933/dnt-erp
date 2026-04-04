@@ -29,12 +29,22 @@ def check_ssn_column():
 
 
 def _handle_db_error(e: Exception):
-    """ssn 컬럼 없음 등 DB 오류 시 안내 메시지"""
+    """DB 스키마 불일치 등 오류 시 JSON으로 안내 (프론트가 500 메시지 표시 가능)"""
     err = str(e).lower()
-    if "ssn" in err or "column" in err or "does not exist" in err:
+    if "ssn" in err and ("does not exist" in err or "column" in err):
         raise HTTPException(
             status_code=500,
             detail="DB에 주민번호(ssn) 컬럼이 없습니다. 프로젝트 루트에서: python -m app.scripts.add_employee_ssn 실행 후 서버를 재시작하세요.",
+        )
+    if "daily_wage" in err and ("does not exist" in err or "column" in err):
+        raise HTTPException(
+            status_code=500,
+            detail="DB에 일급 컬럼(daily_wage_weekday / daily_wage_weekend)이 없습니다. Render에서 서버를 재시작해 기동 시 마이그레이션을 실행하거나, Supabase SQL에서 해당 컬럼을 추가하세요.",
+        )
+    if "column" in err or "does not exist" in err:
+        raise HTTPException(
+            status_code=500,
+            detail="DB 스키마가 앱 버전과 맞지 않습니다(컬럼 누락 등). Render Logs에서 원인을 확인하고 서버를 재시작해 마이그레이션을 적용하세요.",
         )
     raise e
 
@@ -91,11 +101,14 @@ def get_employees(
     store_id: int = Depends(get_store_id),
 ):
     """직원 목록 조회 (ssn 필드 포함)"""
-    db_employees = crud_employee.get_employees(
-        db=db, store_id=store_id, skip=skip, limit=limit, status=status
-    )
-    payload = [_employee_response(emp, db) for emp in db_employees]
-    return JSONResponse(content=payload, headers={"X-Employee-Response-Has-Ssn": "1"})
+    try:
+        db_employees = crud_employee.get_employees(
+            db=db, store_id=store_id, skip=skip, limit=limit, status=status
+        )
+        payload = [_employee_response(emp, db) for emp in db_employees]
+        return JSONResponse(content=payload, headers={"X-Employee-Response-Has-Ssn": "1"})
+    except (OperationalError, ProgrammingError) as e:
+        _handle_db_error(e)
 
 
 @router.get("/{employee_id}")
@@ -105,11 +118,16 @@ def get_employee(
     store_id: int = Depends(get_store_id),
 ):
     """직원 상세 조회 (ssn 필드 항상 포함)"""
-    db_employee = crud_employee.get_employee(db=db, employee_id=employee_id, store_id=store_id)
-    if db_employee is None:
-        raise HTTPException(status_code=404, detail="직원을 찾을 수 없습니다")
-    data = _employee_response(db_employee, db)
-    return JSONResponse(content=data, headers={"X-Employee-Response-Has-Ssn": "1"})
+    try:
+        db_employee = crud_employee.get_employee(db=db, employee_id=employee_id, store_id=store_id)
+        if db_employee is None:
+            raise HTTPException(status_code=404, detail="직원을 찾을 수 없습니다")
+        data = _employee_response(db_employee, db)
+        return JSONResponse(content=data, headers={"X-Employee-Response-Has-Ssn": "1"})
+    except HTTPException:
+        raise
+    except (OperationalError, ProgrammingError) as e:
+        _handle_db_error(e)
 
 
 @router.put("/{employee_id}")

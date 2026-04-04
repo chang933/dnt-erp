@@ -17,6 +17,43 @@ function normalizeEmployeeList(payload: any): Employee[] {
   return [];
 }
 
+/** API 실패 시 사용자에게 보여 줄 본문 + 배포/로컬 안내 */
+function describeEmployeeListError(err: any): { message: string; hint: string } {
+  const status = err?.response?.status as number | undefined;
+  const raw = err?.response?.data?.detail;
+  let detail = '';
+  if (typeof raw === 'string') detail = raw;
+  else if (Array.isArray(raw)) detail = raw.map((x: any) => x?.msg || JSON.stringify(x)).join(' ');
+  else if (raw != null) detail = String(raw);
+
+  if (status === 500) {
+    return {
+      message: detail || '서버 내부 오류(500)',
+      hint:
+        '배포 사이트에서도 이 메시지가 뜰 수 있습니다. 서버가 꺼진 것이 아니라, 운영 서버에서 예외가 난 경우입니다. Render 대시보드 → Logs에서 원인을 확인하세요. 최근 배포 직후라면 DB에 새 컬럼(예: 일급 필드)이 아직 없을 수 있어, 서버 재시작으로 마이그레이션이 돌았는지 확인해 보세요.',
+    };
+  }
+  if (status === 401) {
+    return {
+      message: detail || '로그인이 필요합니다',
+      hint: '다시 로그인한 뒤 직원 관리를 열어 주세요.',
+    };
+  }
+  if (status === 403) {
+    return { message: detail || '접근이 제한된 계정입니다', hint: '관리자 또는 권한이 맞는 계정으로 로그인했는지 확인하세요.' };
+  }
+  if (!err?.response) {
+    return {
+      message: err?.message || '네트워크 오류',
+      hint: `API 주소: ${API_BASE_URL}. 프론트 빌드의 REACT_APP_API_BASE_URL과 CORS·방화벽을 확인하세요.`,
+    };
+  }
+  return {
+    message: detail || err?.message || '직원 목록을 불러오지 못했습니다.',
+    hint: '',
+  };
+}
+
 const EmployeeList: React.FC = () => {
   const { canMutate } = useAuth();
   const windowWidth = useWindowWidth();
@@ -89,8 +126,8 @@ const EmployeeList: React.FC = () => {
     } catch (err: any) {
       console.error('직원 목록 로딩 에러:', err);
       console.error('에러 상세:', err.response?.data || err.message);
-      const errorMessage = err.response?.data?.detail || err.message || '직원 목록을 불러오는데 실패했습니다. 백엔드 서버가 실행 중인지 확인하세요.';
-      setError(errorMessage);
+      const { message, hint } = describeEmployeeListError(err);
+      setError(hint ? `${message}\n\n${hint}` : message);
       // 에러가 발생해도 빈 배열로 설정하여 UI가 표시되도록 함
       setEmployees([]);
     } finally {
@@ -280,12 +317,13 @@ const EmployeeList: React.FC = () => {
       </div>
 
       {error && (
-        <div className="error">
-          <strong>오류:</strong> {error}
-          <br />
-          <small>백엔드 서버({API_BASE_URL})가 실행 중인지 확인하세요.</small>
-          <br />
-          <button className="btn btn-secondary" onClick={fetchEmployees} style={{ marginTop: '0.5rem' }}>
+        <div className="error" style={{ whiteSpace: 'pre-line' }}>
+          <strong>오류</strong>
+          <div style={{ marginTop: '0.35rem' }}>{error}</div>
+          <small style={{ display: 'block', marginTop: '0.65rem', color: '#5c6c7c' }}>
+            API: {API_BASE_URL}
+          </small>
+          <button type="button" className="btn btn-secondary" onClick={fetchEmployees} style={{ marginTop: '0.65rem' }}>
             다시 시도
           </button>
         </div>
