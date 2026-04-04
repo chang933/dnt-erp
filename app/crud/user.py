@@ -28,12 +28,14 @@ def create_user(
     password: str,
     is_admin: bool = False,
     is_active: bool = True,
+    access_mode: str = "full",
 ) -> User:
     row = User(
         username=username.strip().lower(),
         password_hash=get_password_hash(password),
         is_admin=is_admin,
         is_active=is_active,
+        access_mode=access_mode or "full",
     )
     db.add(row)
     db.commit()

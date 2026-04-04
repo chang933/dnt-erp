@@ -10,9 +10,11 @@ export interface Employee {
   employee_position: '홀' | '주방' | '대표' | '사장';
   employment_type: 'FULL_TIME' | 'PART_TIME' | 'DAILY';
   benefit_type?: '4대보험' | '3.3% 프리랜서';
-  salary_type: '시급' | '월급';
+  salary_type: '시급' | '월급' | '일급';
   hourly_wage?: number;
   monthly_salary?: number;
+  daily_wage_weekday?: number;
+  daily_wage_weekend?: number;
   daily_contract_hours?: number;
   hire_date: string;
   resign_date?: string;
@@ -31,9 +33,11 @@ export interface EmployeeCreate {
   employee_position: '홀' | '주방' | '대표' | '사장';
   employment_type: 'FULL_TIME' | 'PART_TIME' | 'DAILY';
   benefit_type?: '4대보험' | '3.3% 프리랜서';
-  salary_type: '시급' | '월급';
+  salary_type: '시급' | '월급' | '일급';
   hourly_wage?: number;
   monthly_salary?: number;
+  daily_wage_weekday?: number;
+  daily_wage_weekend?: number;
   daily_contract_hours?: number;
   hire_date: string;
 }

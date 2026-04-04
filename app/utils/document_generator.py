@@ -88,6 +88,11 @@ def _format_position_title(employee_data: dict) -> str:
             return '홀 아르바이트'
         elif position == '주방':
             return '주방 아르바이트'
+    elif salary_type == '일급':
+        if position == '홀':
+            return '홀 아르바이트'
+        elif position == '주방':
+            return '주방 아르바이트'
     
     # 기본값: 원래 포지션 그대로
     return position

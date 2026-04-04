@@ -5,7 +5,7 @@ from app.db.session import get_db
 from app.schemas.user import LoginRequest, TokenResponse, UserMe
 from app.crud import user as user_crud
 from app.core.security import verify_password, create_access_token
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user_with_access
 from app.models.user import User
 
 router = APIRouter()
@@ -26,5 +26,5 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
 
 
 @router.get("/me", response_model=UserMe)
-def me(current: User = Depends(get_current_user)):
+def me(current: User = Depends(get_current_user_with_access)):
     return UserMe.model_validate(current)

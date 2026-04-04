@@ -28,6 +28,7 @@ class BenefitType(str, enum.Enum):
 class SalaryType(str, enum.Enum):
     HOURLY = "시급"
     MONTHLY = "월급"
+    DAILY = "일급"
 
 class Employee(Base):
     __tablename__ = "erp_employees"
@@ -50,9 +51,11 @@ class Employee(Base):
         SQLEnum(BenefitType, native_enum=False),
         nullable=True,
     )  # 4대보험 / 3.3% 프리랜서 (선택)
-    salary_type = Column(SQLEnum(SalaryType, native_enum=False), nullable=False, default=SalaryType.HOURLY)  # 시급/월급
+    salary_type = Column(SQLEnum(SalaryType, native_enum=False), nullable=False, default=SalaryType.HOURLY)  # 시급/월급/일급
     hourly_wage = Column(Numeric(10, 2), nullable=True)  # 시급 (시급일 때만 사용)
     monthly_salary = Column(Numeric(12, 2), nullable=True)  # 월급 (월급일 때만 사용)
+    daily_wage_weekday = Column(Numeric(12, 2), nullable=True)  # 일급·평일(월~금 출근일당)
+    daily_wage_weekend = Column(Numeric(12, 2), nullable=True)  # 일급·주말(토·일 출근일당)
     daily_contract_hours = Column(Numeric(4, 1), nullable=True)  # 일 근무 계약시간(시급·파트알바용, 예: 3시간·4시간)
     hire_date = Column(Date, nullable=False)  # 입사일
     resign_date = Column(Date, nullable=True)  # 퇴사일

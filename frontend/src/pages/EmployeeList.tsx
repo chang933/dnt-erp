@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { employeeAPI, documentAPI } from '../api/client';
 import { Employee, EmployeeCreate, Document } from '../types';
 import { useWindowWidth } from '../hooks/useWindowWidth';
+import { useAuth } from '../contexts/AuthContext';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8001';
 
@@ -17,6 +18,7 @@ function normalizeEmployeeList(payload: any): Employee[] {
 }
 
 const EmployeeList: React.FC = () => {
+  const { canMutate } = useAuth();
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth <= 768;
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -37,6 +39,8 @@ const EmployeeList: React.FC = () => {
     salary_type: '시급',
     hourly_wage: 0,
     monthly_salary: undefined,
+    daily_wage_weekday: undefined,
+    daily_wage_weekend: undefined,
     daily_contract_hours: undefined,
     hire_date: new Date().toISOString().split('T')[0],
   });
@@ -97,6 +101,7 @@ const EmployeeList: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canMutate) return;
     try {
       // 급여 형태에 따라 필드 검증
       if (formData.salary_type === '시급' && (!formData.hourly_wage || formData.hourly_wage <= 0)) {
@@ -106,6 +111,16 @@ const EmployeeList: React.FC = () => {
       if (formData.salary_type === '월급' && (!formData.monthly_salary || formData.monthly_salary <= 0)) {
         alert('월급을 입력해주세요.');
         return;
+      }
+      if (formData.salary_type === '일급') {
+        if (!formData.daily_wage_weekday || formData.daily_wage_weekday <= 0) {
+          alert('평일 일급을 입력해주세요.');
+          return;
+        }
+        if (!formData.daily_wage_weekend || formData.daily_wage_weekend <= 0) {
+          alert('주말 일급을 입력해주세요.');
+          return;
+        }
       }
       
       // 직원 등록 (주민번호 포함, 빈 값은 null로 전달해 백엔드가 필드 수신하도록 함)
@@ -171,6 +186,8 @@ const EmployeeList: React.FC = () => {
         salary_type: '시급',
         hourly_wage: 0,
         monthly_salary: undefined,
+        daily_wage_weekday: undefined,
+        daily_wage_weekend: undefined,
         daily_contract_hours: undefined,
         hire_date: new Date().toISOString().split('T')[0],
       });
@@ -251,13 +268,15 @@ const EmployeeList: React.FC = () => {
           {filterBtn('DAILY', '일당')}
         </div>
         <h2 className="card-title" style={{ margin: 0, flex: 1, textAlign: 'center', minWidth: '120px' }}>직원 관리</h2>
-        <button
-          className="btn btn-primary"
-          onClick={() => setShowForm(!showForm)}
-          style={{ padding: '0.4rem 1rem' }}
-        >
-          {showForm ? '취소' : '직원 등록'}
-        </button>
+        {canMutate && (
+          <button
+            className="btn btn-primary"
+            onClick={() => setShowForm(!showForm)}
+            style={{ padding: '0.4rem 1rem' }}
+          >
+            {showForm ? '취소' : '직원 등록'}
+          </button>
+        )}
       </div>
 
       {error && (
@@ -313,7 +332,7 @@ const EmployeeList: React.FC = () => {
         <div className="loading">데이터를 불러오는 중...</div>
       )}
 
-      {showForm && (
+      {showForm && canMutate && (
         <form onSubmit={handleSubmit} className="card" style={{ marginTop: '1rem' }}>
           <h3 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>새 직원 등록</h3>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '1rem' }}>
@@ -436,21 +455,25 @@ const EmployeeList: React.FC = () => {
               className="form-select"
               value={formData.salary_type}
               onChange={(e) => {
-                const salaryType = e.target.value as '시급' | '월급';
-                setFormData({ 
-                  ...formData, 
+                const salaryType = e.target.value as '시급' | '월급' | '일급';
+                setFormData({
+                  ...formData,
                   salary_type: salaryType,
                   hourly_wage: salaryType === '시급' ? (formData.hourly_wage || 0) : undefined,
                   monthly_salary: salaryType === '월급' ? (formData.monthly_salary || 0) : undefined,
+                  daily_wage_weekday: salaryType === '일급' ? formData.daily_wage_weekday : undefined,
+                  daily_wage_weekend: salaryType === '일급' ? formData.daily_wage_weekend : undefined,
+                  daily_contract_hours: salaryType === '시급' ? formData.daily_contract_hours : undefined,
                 });
               }}
               required
             >
               <option value="시급">시급</option>
               <option value="월급">월급</option>
+              <option value="일급">일급</option>
             </select>
           </div>
-          {formData.salary_type === '시급' ? (
+          {formData.salary_type === '시급' && (
             <div className="form-group">
               <label className="form-label">시급 *</label>
               <input
@@ -462,7 +485,8 @@ const EmployeeList: React.FC = () => {
                 min="0"
               />
             </div>
-          ) : (
+          )}
+          {formData.salary_type === '월급' && (
             <div className="form-group">
               <label className="form-label">월급 *</label>
               <input
@@ -474,6 +498,41 @@ const EmployeeList: React.FC = () => {
                 min="0"
               />
             </div>
+          )}
+          {formData.salary_type === '일급' && (
+            <>
+              <div className="form-group">
+                <label className="form-label">평일 일급 (월~금 출근) *</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  value={formData.daily_wage_weekday ?? ''}
+                  onChange={(e) =>
+                    setFormData({ ...formData, daily_wage_weekday: e.target.value ? Number(e.target.value) : undefined })
+                  }
+                  required
+                  min="0"
+                  placeholder="예: 180000"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">주말 일급 (토·일 출근) *</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  value={formData.daily_wage_weekend ?? ''}
+                  onChange={(e) =>
+                    setFormData({ ...formData, daily_wage_weekend: e.target.value ? Number(e.target.value) : undefined })
+                  }
+                  required
+                  min="0"
+                  placeholder="예: 200000"
+                />
+              </div>
+              <p className="form-hint" style={{ gridColumn: '1 / -1', fontSize: '0.85rem', color: '#666', margin: 0 }}>
+                급여 명세는 주간 스케줄의 출근일 기준으로 평일·주말 일급을 합산합니다.
+              </p>
+            </>
           )}
           {formData.salary_type === '시급' && (
             <div className="form-group">

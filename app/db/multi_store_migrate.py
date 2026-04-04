@@ -116,3 +116,28 @@ def run(engine: Engine) -> None:
             )
         except Exception:
             pass
+
+        # 직원: 일급(평일/주말) 컬럼
+        try:
+            conn.execute(
+                text(
+                    "ALTER TABLE erp_employees ADD COLUMN IF NOT EXISTS daily_wage_weekday NUMERIC(12,2)"
+                )
+            )
+            conn.execute(
+                text(
+                    "ALTER TABLE erp_employees ADD COLUMN IF NOT EXISTS daily_wage_weekend NUMERIC(12,2)"
+                )
+            )
+        except Exception:
+            pass
+
+        # 사용자 권한 모드 (조회전용 / 직원·식자재 한정)
+        try:
+            conn.execute(
+                text(
+                    "ALTER TABLE erp_users ADD COLUMN IF NOT EXISTS access_mode VARCHAR(32) NOT NULL DEFAULT 'full'"
+                )
+            )
+        except Exception:
+            pass

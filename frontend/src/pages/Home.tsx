@@ -1,17 +1,35 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+
+const ALL_MENU_ITEMS = [
+  { path: '/employees', label: '직원 관리', desc: '직원 등록 및 관리' },
+  { path: '/schedules', label: '스케줄 관리', desc: '월간 스케줄 캘린더' },
+  { path: '/attendance', label: '출퇴근 관리', desc: '출퇴근 기록 조회' },
+  { path: '/payroll', label: '급여 관리', desc: '급여 명세 조회' },
+  { path: '/documents', label: '서류 관리', desc: '보건증, 근로계약서 관리' },
+  { path: '/ingredients', label: '식자재 관리', desc: '식자재 재고 관리' },
+  { path: '/customers', label: '고객 관리', desc: '고객 정보 및 블랙리스트' },
+  { path: '/reservations', label: '예약', desc: '예약일·예약자·인원·기타내용 관리' },
+];
+
+const STAFF_INGREDIENTS_HOME_PATHS = new Set([
+  '/employees',
+  '/schedules',
+  '/attendance',
+  '/documents',
+  '/ingredients',
+  '/reservations',
+]);
 
 const Home: React.FC = () => {
-  const menuItems = [
-    { path: '/employees', label: '직원 관리', desc: '직원 등록 및 관리' },
-    { path: '/schedules', label: '스케줄 관리', desc: '월간 스케줄 캘린더' },
-    { path: '/attendance', label: '출퇴근 관리', desc: '출퇴근 기록 조회' },
-    { path: '/payroll', label: '급여 관리', desc: '급여 명세 조회' },
-    { path: '/documents', label: '서류 관리', desc: '보건증, 근로계약서 관리' },
-    { path: '/ingredients', label: '식자재 관리', desc: '식자재 재고 관리' },
-    { path: '/customers', label: '고객 관리', desc: '고객 정보 및 블랙리스트' },
-    { path: '/reservations', label: '예약', desc: '예약일·예약자·인원·기타내용 관리' },
-  ];
+  const { user } = useAuth();
+  const menuItems = useMemo(() => {
+    if (user?.access_mode === 'staff_ingredients') {
+      return ALL_MENU_ITEMS.filter((i) => STAFF_INGREDIENTS_HOME_PATHS.has(i.path));
+    }
+    return ALL_MENU_ITEMS;
+  }, [user?.access_mode]);
 
   return (
     <div>

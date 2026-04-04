@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 import { foodCostAPI } from '../api/client';
 import { FoodCost, FoodCostCreate } from '../types';
 
@@ -41,6 +42,7 @@ const EMPTY_FORM: FoodCostCreate = {
 };
 
 const IngredientList: React.FC = () => {
+  const { canMutate } = useAuth();
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
@@ -57,7 +59,14 @@ const IngredientList: React.FC = () => {
   // 해당 월 데이터 로드
   useEffect(() => {
     fetchRecords();
-  }, [year, month]);
+  }, [year, month, canMutate]);
+
+  useEffect(() => {
+    if (!canMutate) {
+      setShowForm(false);
+      setEditingRecord(null);
+    }
+  }, [canMutate]);
 
   const fetchRecords = async () => {
     setLoading(true);
@@ -67,11 +76,13 @@ const IngredientList: React.FC = () => {
       const endDate = toDateStr(year, month, lastDay);
       const res = await foodCostAPI.getAll({ start_date: startDate, end_date: endDate, limit: 2000 });
       setRecords(normalizeList<FoodCost>(res.data));
-      foodCostAPI
-        .syncKitchenExpenseRange({ start_date: startDate, end_date: endDate })
-        .catch(() => {
-          /* 동기화 실패는 목록 조회와 무관 */
-        });
+      if (canMutate) {
+        foodCostAPI
+          .syncKitchenExpenseRange({ start_date: startDate, end_date: endDate })
+          .catch(() => {
+            /* 동기화 실패는 목록 조회와 무관 */
+          });
+      }
     } catch (err) {
       console.error('식자재 데이터 로딩 실패:', err);
       setRecords([]);
@@ -162,6 +173,7 @@ const IngredientList: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canMutate) return;
     if (!formData.amount || formData.amount <= 0) {
       alert('금액을 입력해주세요.');
       return;
@@ -184,6 +196,7 @@ const IngredientList: React.FC = () => {
   };
 
   const handleDelete = async (id: number) => {
+    if (!canMutate) return;
     if (!window.confirm('삭제하시겠습니까?')) return;
     try {
       await foodCostAPI.delete(id);
@@ -197,9 +210,11 @@ const IngredientList: React.FC = () => {
     <div className="card card-fullheight">
       <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2 className="card-title">식자재 관리</h2>
-        <button className="btn btn-primary" onClick={() => openNewForm()}>
-          + 입력
-        </button>
+        {canMutate && (
+          <button className="btn btn-primary" onClick={() => openNewForm()}>
+            + 입력
+          </button>
+        )}
       </div>
       <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', color: '#64748b' }}>
         날짜별 <strong>사용(입고)</strong> 금액 합계는 자동으로 <strong>당일 매출/지출관리</strong>의 <strong>주방지출</strong>(메모: 식자재 자동)에 반영되며, <strong>순익계산기</strong>의 주방지출 누적에도 포함됩니다. 실 지급만 입력한 날은 사용 금액이 없으면 주방지출 자동 금액은 0으로 맞춰집니다.
@@ -367,16 +382,18 @@ const IngredientList: React.FC = () => {
                 사용 {formatCurrency(selectedRecords.filter(r => r.record_type === 'usage').reduce((s, r) => s + r.amount, 0))}원 / 지급 {formatCurrency(selectedRecords.filter(r => r.record_type === 'payment').reduce((s, r) => s + r.amount, 0))}원
               </span>
             </h3>
-            <div style={{ display: 'flex', gap: '0.4rem' }}>
-              <button className="btn btn-primary" style={{ fontSize: '0.82rem', padding: '4px 10px' }}
-                onClick={() => openNewForm(selectedDate, 'usage')}>
-                + 사용 입력
-              </button>
-              <button className="btn btn-sm" style={{ fontSize: '0.82rem', padding: '4px 10px', background: '#f0fdf4', color: '#15803d', border: '1px solid #86efac' }}
-                onClick={() => openNewForm(selectedDate, 'payment')}>
-                + 지급 입력
-              </button>
-            </div>
+            {canMutate && (
+              <div style={{ display: 'flex', gap: '0.4rem' }}>
+                <button className="btn btn-primary" style={{ fontSize: '0.82rem', padding: '4px 10px' }}
+                  onClick={() => openNewForm(selectedDate, 'usage')}>
+                  + 사용 입력
+                </button>
+                <button className="btn btn-sm" style={{ fontSize: '0.82rem', padding: '4px 10px', background: '#f0fdf4', color: '#15803d', border: '1px solid #86efac' }}
+                  onClick={() => openNewForm(selectedDate, 'payment')}>
+                  + 지급 입력
+                </button>
+              </div>
+            )}
           </div>
 
           {selectedRecords.length === 0 ? (
@@ -407,12 +424,16 @@ const IngredientList: React.FC = () => {
                             {formatCurrency(r.amount)}원
                             {r.memo && <span style={{ marginLeft: '0.5rem', fontWeight: 400, color: '#64748b', fontSize: '0.82rem' }}>| {r.memo}</span>}
                           </div>
-                          <button className="btn btn-sm"
-                            style={{ background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1', fontSize: '0.78rem', padding: '2px 8px' }}
-                            onClick={() => openEditForm(r)}>수정</button>
-                          <button className="btn btn-danger btn-sm"
-                            style={{ fontSize: '0.78rem', padding: '2px 8px' }}
-                            onClick={() => handleDelete(r.id)}>삭제</button>
+                          {canMutate && (
+                            <>
+                              <button className="btn btn-sm"
+                                style={{ background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1', fontSize: '0.78rem', padding: '2px 8px' }}
+                                onClick={() => openEditForm(r)}>수정</button>
+                              <button className="btn btn-danger btn-sm"
+                                style={{ fontSize: '0.78rem', padding: '2px 8px' }}
+                                onClick={() => handleDelete(r.id)}>삭제</button>
+                            </>
+                          )}
                         </div>
                       );
                     })}
@@ -444,12 +465,16 @@ const IngredientList: React.FC = () => {
                             {formatCurrency(r.amount)}원
                             {r.memo && <span style={{ marginLeft: '0.5rem', fontWeight: 400, color: '#64748b', fontSize: '0.82rem' }}>| {r.memo}</span>}
                           </div>
-                          <button className="btn btn-sm"
-                            style={{ background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1', fontSize: '0.78rem', padding: '2px 8px' }}
-                            onClick={() => openEditForm(r)}>수정</button>
-                          <button className="btn btn-danger btn-sm"
-                            style={{ fontSize: '0.78rem', padding: '2px 8px' }}
-                            onClick={() => handleDelete(r.id)}>삭제</button>
+                          {canMutate && (
+                            <>
+                              <button className="btn btn-sm"
+                                style={{ background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1', fontSize: '0.78rem', padding: '2px 8px' }}
+                                onClick={() => openEditForm(r)}>수정</button>
+                              <button className="btn btn-danger btn-sm"
+                                style={{ fontSize: '0.78rem', padding: '2px 8px' }}
+                                onClick={() => handleDelete(r.id)}>삭제</button>
+                            </>
+                          )}
                         </div>
                       );
                     })}
@@ -462,7 +487,7 @@ const IngredientList: React.FC = () => {
       )}
 
       {/* 입력/수정 모달 */}
-      {showForm && (
+      {showForm && canMutate && (
         <div
           style={{
             position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',

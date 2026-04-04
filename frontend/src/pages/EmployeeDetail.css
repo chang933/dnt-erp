@@ -1,0 +1,346 @@
+/* 직원 상세 — 프로필형 레이아웃 */
+
+.employee-detail-page {
+  max-width: 880px;
+  margin: 0 auto;
+}
+
+.employee-detail-hero {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 1.5rem 1.35rem;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 48%, #3182ce 100%);
+  color: #fff;
+  box-shadow: 0 10px 28px rgba(30, 58, 95, 0.28);
+  margin-bottom: 1.35rem;
+}
+
+.employee-detail-avatar {
+  flex-shrink: 0;
+  width: 4.25rem;
+  height: 4.25rem;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.65rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+}
+
+.employee-detail-hero-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.employee-detail-name {
+  margin: 0 0 0.5rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.employee-detail-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.employee-detail-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.28rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+}
+
+.employee-detail-tag--position {
+  background: rgba(255, 255, 255, 0.95);
+  color: #1e3a5f;
+  border-color: transparent;
+}
+
+.employee-detail-tag--status-active {
+  background: #c6f6d5;
+  color: #22543d;
+  border-color: transparent;
+}
+
+.employee-detail-tag--status-inactive {
+  background: #fed7d7;
+  color: #822727;
+  border-color: transparent;
+}
+
+.employee-detail-panels {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.employee-detail-panel {
+  background: #fafbfc;
+  border: 1px solid #e8ecf1;
+  border-radius: 12px;
+  padding: 1.1rem 1.15rem 1rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.employee-detail-panel-title {
+  margin: 0 0 0.85rem;
+  padding-bottom: 0.55rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+  border-bottom: 1px solid #e8ecf1;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.employee-detail-panel-title::before {
+  content: '';
+  width: 3px;
+  height: 0.95rem;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #3182ce, #2b6cb0);
+}
+
+.employee-detail-dl {
+  margin: 0;
+  display: grid;
+  gap: 0;
+}
+
+.employee-detail-row {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, 9.5rem) 1fr;
+  gap: 0.65rem 1rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid #eef1f5;
+  align-items: start;
+}
+
+.employee-detail-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.employee-detail-row dt {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.employee-detail-row dd {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #1e293b;
+  font-weight: 500;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.employee-detail-row dd.employee-detail-value--muted {
+  color: #94a3b8;
+  font-weight: 400;
+}
+
+.employee-detail-money {
+  font-variant-numeric: tabular-nums;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.employee-detail-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.employee-detail-pill {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.employee-detail-pill--violet {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+.employee-detail-pill--amber {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.employee-detail-documents-panel {
+  margin-top: 0.25rem;
+}
+
+.employee-detail-doc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.employee-detail-doc-card {
+  background: #fff;
+  border: 1px solid #e8ecf1;
+  border-radius: 12px;
+  padding: 1rem;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.employee-detail-doc-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+
+.employee-detail-doc-card-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 0.65rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.employee-detail-doc-card-title span.icon {
+  font-size: 1.1rem;
+  opacity: 0.85;
+}
+
+.employee-detail-doc-thumb-wrap {
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  margin-bottom: 0.65rem;
+}
+
+.employee-detail-doc-thumb {
+  width: 100%;
+  max-height: 200px;
+  object-fit: contain;
+  display: block;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.employee-detail-doc-meta {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-bottom: 0.2rem;
+}
+
+.employee-detail-doc-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 2.25rem 1rem;
+  color: #94a3b8;
+  font-size: 0.9rem;
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1px dashed #e2e8f0;
+}
+
+/* 헤더 액션 */
+.employee-detail-card-header {
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.employee-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.employee-detail-actions .btn {
+  border-radius: 8px;
+}
+
+/* 로딩 / 에러 */
+.employee-detail-state {
+  text-align: center;
+  padding: 2.5rem 1rem;
+}
+
+.employee-detail-state--loading {
+  color: #64748b;
+}
+
+.employee-detail-state--error {
+  color: #c53030;
+  margin-bottom: 1rem;
+}
+
+/* 수정 폼 래퍼 */
+.employee-detail-form-shell {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 0.25rem 0 0.5rem;
+}
+
+.employee-detail-form-section-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin: 1.25rem 0 0.75rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid #e8ecf1;
+}
+
+.employee-detail-form-section-title:first-child {
+  margin-top: 0;
+}
+
+@media (max-width: 768px) {
+  .employee-detail-hero {
+    flex-direction: column;
+    text-align: center;
+    padding: 1.35rem 1rem;
+  }
+
+  .employee-detail-tags {
+    justify-content: center;
+  }
+
+  .employee-detail-row {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
+    padding: 0.65rem 0;
+  }
+
+  .employee-detail-row dt {
+    font-size: 0.72rem;
+  }
+
+  .employee-detail-name {
+    font-size: 1.3rem;
+  }
+}

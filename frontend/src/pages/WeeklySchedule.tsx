@@ -65,11 +65,13 @@ const WeeklySchedule: React.FC = () => {
       const weekDates = getWeekDates(selectedWeek);
       const startDate = weekDates[0].dateStr;
       const endDate = weekDates[6].dateStr;
+      const allWeekDateStrs = weekDates.map((d) => d.dateStr);
 
       const newSelections: Record<number, Set<string>> = {};
       const newExtraHours: Record<number, Record<string, number>> = {};
 
       for (const employee of employeesToUse) {
+        const isDaily = (employee as any).employment_type === 'DAILY';
         try {
           const response = await scheduleAPI.getAll({
             employee_id: employee.id,
@@ -90,11 +92,15 @@ const WeeklySchedule: React.FC = () => {
               empExtra[scheduleDate] = Number(schedule.extra_hours ?? 0);
             }
           });
+          // 일당: 해당 주에 저장된 스케줄이 없으면 기본 전체 휴무(나오는 날만 근무로 토글)
+          if (isDaily && schedules.length === 0) {
+            allWeekDateStrs.forEach((ds) => holidayDates.add(ds));
+          }
           newSelections[employee.id] = holidayDates;
           newExtraHours[employee.id] = empExtra;
         } catch (err) {
           console.error(`직원 ${employee.id}의 스케줄 로딩 실패:`, err);
-          newSelections[employee.id] = new Set<string>();
+          newSelections[employee.id] = isDaily ? new Set(allWeekDateStrs) : new Set<string>();
           newExtraHours[employee.id] = {};
         }
       }
@@ -478,8 +484,12 @@ const WeeklySchedule: React.FC = () => {
         <strong>사용 방법:</strong>
         <ul style={{ margin: '0.5rem 0 0 1.5rem', padding: 0 }}>
           <li>각 날짜 버튼을 클릭하면 휴무일/근무일을 토글할 수 있습니다.</li>
-          <li>초기 상태는 모두 근무일(녹색)입니다.</li>
-          <li>휴무일로 설정하려면 버튼을 클릭하여 빨간색(휴무)으로 변경하세요.</li>
+          <li>
+            <strong>일당</strong> 직원은 해당 주에 아직 저장된 스케줄이 없으면{' '}
+            <strong>전체 휴무(빨간색)</strong>에서 시작합니다. 실제 출근하는 날만 클릭해{' '}
+            <strong>근무(녹색)</strong>로 바꿔 주세요.
+          </li>
+          <li>그 외 직원은 초기 상태가 모두 근무일(녹색)입니다. 쉬는 날을 빨간색(휴무)으로 바꿉니다.</li>
           <li><strong>시급·알바</strong> 직원은 근무일마다 <strong>+30분</strong>, <strong>+1시간</strong> 버튼으로 추가 근무를 쌓고, <strong>−30분</strong>, <strong>−1시간</strong>으로 줄일 수 있습니다. (예: 2시간 30분 연장 시 +1시간 두 번, +30분 한 번)</li>
           <li>각 직원의 스케줄을 설정한 후 '저장' 버튼을 클릭하여 저장하세요.</li>
         </ul>

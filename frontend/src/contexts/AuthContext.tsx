@@ -18,6 +18,10 @@ type AuthContextValue = {
   token: string | null;
   user: UserMe | null;
   ready: boolean;
+  /** 조회 전용(readonly)이면 false */
+  canMutate: boolean;
+  /** 직원·식자재만 (매출/정산 메뉴 숨김) */
+  isStaffIngredientsOnly: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
 };
@@ -64,9 +68,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }, []);
 
+  const accessMode = user?.access_mode ?? 'full';
+  const canMutate = accessMode !== 'readonly';
+  const isStaffIngredientsOnly = accessMode === 'staff_ingredients';
+
   const value = useMemo(
-    () => ({ token, user, ready, login, logout }),
-    [token, user, ready, login, logout]
+    () => ({
+      token,
+      user,
+      ready,
+      canMutate,
+      isStaffIngredientsOnly,
+      login,
+      logout,
+    }),
+    [token, user, ready, canMutate, isStaffIngredientsOnly, login, logout]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

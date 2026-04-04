@@ -39,6 +39,7 @@ import SalesAnalysis from './pages/SalesAnalysis';
 import KitchenDisplay from './pages/KitchenDisplay';
 import ServingDisplay from './pages/ServingDisplay';
 import Footer from './components/Footer';
+import type { UserMe } from './api/client';
 
 type NavItem = { path: string; label: string; adminOnly?: boolean };
 
@@ -88,6 +89,43 @@ const NAV_GROUPS: { id: string; label: string; items: NavItem[] }[] = [
   },
 ];
 
+/** staff_ingredients: 직원(급여 제외) + 식자재 + 예약 */
+function navGroupsForUser(user: UserMe | null): { id: string; label: string; items: NavItem[] }[] {
+  const mode = user?.access_mode ?? 'full';
+  if (mode !== 'staff_ingredients') return NAV_GROUPS;
+  return NAV_GROUPS.map((g) => {
+    if (g.id === 'employees') {
+      return { ...g, items: g.items.filter((i) => i.path !== '/payroll') };
+    }
+    if (g.id === 'restaurant') {
+      return {
+        ...g,
+        items: g.items.filter((i) => i.path === '/ingredients' || i.path === '/reservations'),
+      };
+    }
+    return null;
+  }).filter((g): g is { id: string; label: string; items: NavItem[] } => g != null);
+}
+
+function StaffPageGuard() {
+  const { user, ready } = useAuth();
+  const location = useLocation();
+  if (!ready || !user) return <Outlet />;
+  if (user.access_mode !== 'staff_ingredients') return <Outlet />;
+  const p = location.pathname.split('?')[0];
+  const ok =
+    p === '/' ||
+    p.startsWith('/employees') ||
+    p.startsWith('/weekly-schedule') ||
+    p.startsWith('/schedules') ||
+    p.startsWith('/attendance') ||
+    p.startsWith('/documents') ||
+    p.startsWith('/ingredients') ||
+    p.startsWith('/reservations');
+  if (ok) return <Outlet />;
+  return <Navigate to="/" replace />;
+}
+
 function Navigation({
   isMobile,
   navOpen,
@@ -99,6 +137,7 @@ function Navigation({
 }) {
   const location = useLocation();
   const { user } = useAuth();
+  const groups = navGroupsForUser(user);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const navRef = useRef<HTMLElement>(null);
 
@@ -142,7 +181,7 @@ function Navigation({
           </div>
         )}
         <ul className="nav-groups">
-          {NAV_GROUPS.map((group) => {
+          {groups.map((group) => {
             const items = group.items.filter((item) => !item.adminOnly || user?.is_admin);
             if (items.length === 0) return null;
             const active = isGroupActive(items);
@@ -271,6 +310,8 @@ function HeaderUserMenu() {
 function AppShell() {
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth <= 768;
+  const { user } = useAuth();
+  const readOnlyBanner = user?.access_mode === 'readonly';
   const [navOpen, setNavOpen] = useState(false);
   const [branchSubtitle, setBranchSubtitle] = useState<string | null>(null);
   const closeNav = useCallback(() => setNavOpen(false), []);
@@ -322,6 +363,21 @@ function AppShell() {
           </div>
         </div>
       </header>
+      {readOnlyBanner && (
+        <div
+          role="status"
+          style={{
+            background: '#fff8e6',
+            borderBottom: '1px solid #ffc107',
+            color: '#856404',
+            padding: '0.5rem 1rem',
+            textAlign: 'center',
+            fontSize: '0.9rem',
+          }}
+        >
+          조회 전용 계정입니다. 저장·수정·삭제·등록은 할 수 없습니다.
+        </div>
+      )}
       <Navigation isMobile={isMobile} navOpen={navOpen} onClose={closeNav} />
       <main className="app-main">
         <Outlet />
@@ -362,32 +418,34 @@ function AppRoutes() {
       <Route path="/login" element={<Login />} />
       <Route element={<RequireAuth />}>
         <Route element={<AppShell />}>
-          <Route path="/" element={<Home />} />
-          <Route path="/employees" element={<EmployeeList />} />
-          <Route path="/employees/:id" element={<EmployeeDetail />} />
-          <Route path="/weekly-schedule" element={<WeeklySchedule />} />
-          <Route path="/schedules" element={<ScheduleCalendar />} />
-          <Route path="/attendance" element={<AttendanceList />} />
-          <Route path="/payroll" element={<PayrollList />} />
-          <Route path="/documents" element={<DocumentList />} />
-          <Route path="/ingredients" element={<IngredientList />} />
-          <Route path="/customers" element={<CustomerList />} />
-          <Route path="/reservations" element={<ReservationList />} />
-          <Route path="/revenue-expense" element={<RevenueExpenseList />} />
-          <Route path="/menu-input" element={<MenuInput />} />
-          <Route path="/menu-manager" element={<MenuManager />} />
-          <Route path="/sales-analysis" element={<SalesAnalysis />} />
-          <Route path="/profit-calculator" element={<ProfitCalculator />} />
-          <Route path="/kds" element={<KitchenDisplay />} />
-          <Route path="/serving" element={<ServingDisplay />} />
-          <Route
-            path="/admin/stores"
-            element={
-              <AdminOnly>
-                <AdminStores />
-              </AdminOnly>
-            }
-          />
+          <Route element={<StaffPageGuard />}>
+            <Route path="/" element={<Home />} />
+            <Route path="/employees" element={<EmployeeList />} />
+            <Route path="/employees/:id" element={<EmployeeDetail />} />
+            <Route path="/weekly-schedule" element={<WeeklySchedule />} />
+            <Route path="/schedules" element={<ScheduleCalendar />} />
+            <Route path="/attendance" element={<AttendanceList />} />
+            <Route path="/payroll" element={<PayrollList />} />
+            <Route path="/documents" element={<DocumentList />} />
+            <Route path="/ingredients" element={<IngredientList />} />
+            <Route path="/customers" element={<CustomerList />} />
+            <Route path="/reservations" element={<ReservationList />} />
+            <Route path="/revenue-expense" element={<RevenueExpenseList />} />
+            <Route path="/menu-input" element={<MenuInput />} />
+            <Route path="/menu-manager" element={<MenuManager />} />
+            <Route path="/sales-analysis" element={<SalesAnalysis />} />
+            <Route path="/profit-calculator" element={<ProfitCalculator />} />
+            <Route path="/kds" element={<KitchenDisplay />} />
+            <Route path="/serving" element={<ServingDisplay />} />
+            <Route
+              path="/admin/stores"
+              element={
+                <AdminOnly>
+                  <AdminStores />
+                </AdminOnly>
+              }
+            />
+          </Route>
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -176,6 +176,22 @@ const PayrollList: React.FC = () => {
           thisMonthWorkDays = workDaysInfo.workDays;
           baseSalary = workHours * Number(hourlyWage || 0);
           console.log(`직원 ${employee.name} (시급): ${workDaysInfo.workDays}일 × ${dailyContractHours ?? '(평일10/주말11)'}시간 × ${Number(hourlyWage || 0)}원 = ${baseSalary}원`);
+        } else if (salaryType === '일급') {
+          const wd = Number((employee as any).daily_wage_weekday || 0);
+          const we = Number((employee as any).daily_wage_weekend || 0);
+          const dailyInfo = calculateDailyWagePay(
+            schedulesMap[employee.id] || [],
+            year,
+            month,
+            wd,
+            we
+          );
+          workHours = 0;
+          thisMonthWorkDays = dailyInfo.workDays;
+          baseSalary = dailyInfo.basePay;
+          console.log(
+            `직원 ${employee.name} (일급): 출근 ${dailyInfo.workDays}일 (평일 ${dailyInfo.weekdayWorkDays} / 주말 ${dailyInfo.weekendWorkDays}) → ${baseSalary}원`
+          );
         } else {
           console.log(`직원 ${employee.name}: 급여 타입이 없거나 잘못됨 - ${salaryType}`, { employee });
         }
@@ -187,6 +203,9 @@ const PayrollList: React.FC = () => {
           existing.base_pay = baseSalary;
           if (employee.salary_type === '시급') {
             existing.work_hours = workHours;
+            existing.this_month_work_days = thisMonthWorkDays;
+          } else if (employee.salary_type === '일급') {
+            existing.work_hours = 0;
             existing.this_month_work_days = thisMonthWorkDays;
           }
           existing.absent_count = absentCount;
@@ -202,7 +221,9 @@ const PayrollList: React.FC = () => {
             employee.salary_type,
             employee.monthly_salary,
             employee.hourly_wage,
-            (employee as any).daily_contract_hours
+            (employee as any).daily_contract_hours,
+            (employee as any).daily_wage_weekday,
+            (employee as any).daily_wage_weekend
           );
           existing.net_pay = calculateNetPay(
             existing.base_pay,
@@ -210,7 +231,10 @@ const PayrollList: React.FC = () => {
             deductions.employee,
             employee.salary_type,
             employee.monthly_salary,
-            employee.hourly_wage
+            employee.hourly_wage,
+            (employee as any).daily_contract_hours,
+            (employee as any).daily_wage_weekday,
+            (employee as any).daily_wage_weekend
           );
         } else {
           const age = calculateAge(employee.birth_date);
@@ -223,7 +247,9 @@ const PayrollList: React.FC = () => {
             employee.salary_type,
             employee.monthly_salary,
             employee.hourly_wage,
-            (employee as any).daily_contract_hours
+            (employee as any).daily_contract_hours,
+            (employee as any).daily_wage_weekday,
+            (employee as any).daily_wage_weekend
           );
           const netPay = calculateNetPay(
             baseSalary,
@@ -231,7 +257,10 @@ const PayrollList: React.FC = () => {
             deductions.employee,
             employee.salary_type,
             employee.monthly_salary,
-            employee.hourly_wage
+            employee.hourly_wage,
+            (employee as any).daily_contract_hours,
+            (employee as any).daily_wage_weekday,
+            (employee as any).daily_wage_weekend
           );
 
           payrollsMap.set(employee.id, {
@@ -295,6 +324,41 @@ const PayrollList: React.FC = () => {
     return { totalHours, workDays };
   };
 
+  /** 일급: 스케줄 출근일마다 요일에 따라 평일/주말 일급 합산 (주말 = 토·일) */
+  const calculateDailyWagePay = (
+    schedules: Schedule[],
+    year: number,
+    month: number,
+    weekdayRate: number,
+    weekendRate: number
+  ): { basePay: number; workDays: number; weekdayWorkDays: number; weekendWorkDays: number } => {
+    const daysInMonth = new Date(year, month, 0).getDate();
+    let basePay = 0;
+    let workDays = 0;
+    let weekdayWorkDays = 0;
+    let weekendWorkDays = 0;
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const date = new Date(year, month - 1, day);
+      const dayOfWeek = date.getDay();
+      const schedule = schedules.find(s => s.date === dateStr);
+
+      if (schedule && schedule.schedule_type === '출근') {
+        workDays++;
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+        if (isWeekend) {
+          weekendWorkDays++;
+          basePay += weekendRate;
+        } else {
+          weekdayWorkDays++;
+          basePay += weekdayRate;
+        }
+      }
+    }
+    return { basePay, workDays, weekdayWorkDays, weekendWorkDays };
+  };
+
   const calculateAge = (birthDate?: string): number | null => {
     if (!birthDate) return null;
     const birth = new Date(birthDate);
@@ -341,10 +405,12 @@ const PayrollList: React.FC = () => {
 
   const calculateAbsentDeduction = (
     absentCount: number,
-    salaryType: '시급' | '월급',
+    salaryType: '시급' | '월급' | '일급',
     monthlySalary?: number,
     hourlyWage?: number,
-    dailyContractHours?: number
+    dailyContractHours?: number,
+    dailyWageWeekday?: number,
+    dailyWageWeekend?: number
   ): number => {
     if (absentCount <= 0) return 0;
     if (salaryType === '월급' && monthlySalary) {
@@ -356,6 +422,16 @@ const PayrollList: React.FC = () => {
       const dailySalary = Math.round(hourlyWage * hoursPerDay);
       return dailySalary * absentCount;
     }
+    if (salaryType === '일급') {
+      const wk = Number(dailyWageWeekday || 0);
+      const we = Number(dailyWageWeekend || 0);
+      if (wk > 0 && we > 0) {
+        const avgDaily = Math.round((wk + we) / 2);
+        return avgDaily * absentCount;
+      }
+      const single = wk || we;
+      if (single > 0) return Math.round(single) * absentCount;
+    }
     return 0;
   };
 
@@ -363,13 +439,23 @@ const PayrollList: React.FC = () => {
     basePay: number,
     absentCount: number,
     deductions: number,
-    salaryType: '시급' | '월급',
+    salaryType: '시급' | '월급' | '일급',
     monthlySalary?: number,
     hourlyWage?: number,
-    dailyContractHours?: number
+    dailyContractHours?: number,
+    dailyWageWeekday?: number,
+    dailyWageWeekend?: number
   ): number => {
     let finalSalary = basePay;
-    const absentDeduction = calculateAbsentDeduction(absentCount, salaryType, monthlySalary, hourlyWage, dailyContractHours);
+    const absentDeduction = calculateAbsentDeduction(
+      absentCount,
+      salaryType,
+      monthlySalary,
+      hourlyWage,
+      dailyContractHours,
+      dailyWageWeekday,
+      dailyWageWeekend
+    );
     finalSalary -= absentDeduction;
     finalSalary -= deductions;
     return Math.max(0, Math.round(finalSalary));
@@ -404,7 +490,9 @@ const PayrollList: React.FC = () => {
           employee.salary_type,
           employee.monthly_salary,
           employee.hourly_wage,
-          dailyContractHours
+          dailyContractHours,
+          (employee as any).daily_wage_weekday,
+          (employee as any).daily_wage_weekend
         );
         const netPay = calculateNetPay(
           p.base_pay,
@@ -413,7 +501,9 @@ const PayrollList: React.FC = () => {
           employee.salary_type,
           employee.monthly_salary,
           employee.hourly_wage,
-          dailyContractHours
+          dailyContractHours,
+          (employee as any).daily_wage_weekday,
+          (employee as any).daily_wage_weekend
         );
 
         return {
@@ -442,7 +532,9 @@ const PayrollList: React.FC = () => {
           employee.salary_type,
           employee.monthly_salary,
           employee.hourly_wage,
-          dailyContractHours
+          dailyContractHours,
+          (employee as any).daily_wage_weekday,
+          (employee as any).daily_wage_weekend
         );
         const netPay = calculateNetPay(
           p.base_pay,
@@ -451,7 +543,9 @@ const PayrollList: React.FC = () => {
           employee.salary_type,
           employee.monthly_salary,
           employee.hourly_wage,
-          dailyContractHours
+          dailyContractHours,
+          (employee as any).daily_wage_weekday,
+          (employee as any).daily_wage_weekend
         );
 
         return {

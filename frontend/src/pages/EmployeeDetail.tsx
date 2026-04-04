@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import { employeeAPI, documentAPI } from '../api/client';
 import { Employee, EmployeeCreate, Document } from '../types';
+import './EmployeeDetail.css';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8001';
 
@@ -13,7 +15,21 @@ function normalizeList<T>(payload: any): T[] {
   return [];
 }
 
+function employmentTypeLabel(t: string | undefined): string {
+  if (t === 'DAILY') return '일당';
+  if (t === 'PART_TIME') return '파트';
+  if (t === 'FULL_TIME') return '정직원';
+  return t || '-';
+}
+
+function benefitTypeLabel(t: string | undefined): string {
+  if (t === '3.3% 프리랜서') return '3.3% 프리랜서';
+  if (t === '4대보험') return '4대보험 근로자';
+  return t || '-';
+}
+
 const EmployeeDetail: React.FC = () => {
+  const { canMutate } = useAuth();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [employee, setEmployee] = useState<Employee | null>(null);
@@ -38,6 +54,8 @@ const EmployeeDetail: React.FC = () => {
     salary_type: '시급',
     hourly_wage: 0,
     monthly_salary: undefined,
+    daily_wage_weekday: undefined,
+    daily_wage_weekend: undefined,
     daily_contract_hours: undefined,
     hire_date: '',
   });
@@ -48,6 +66,10 @@ const EmployeeDetail: React.FC = () => {
       fetchDocuments(parseInt(id));
     }
   }, [id]);
+
+  useEffect(() => {
+    if (!canMutate) setIsEditing(false);
+  }, [canMutate]);
 
   const fetchEmployee = async (employeeId: number) => {
     try {
@@ -68,6 +90,8 @@ const EmployeeDetail: React.FC = () => {
         salary_type: response.data.salary_type,
         hourly_wage: response.data.hourly_wage || 0,
         monthly_salary: response.data.monthly_salary || undefined,
+        daily_wage_weekday: (response.data as any).daily_wage_weekday ?? undefined,
+        daily_wage_weekend: (response.data as any).daily_wage_weekend ?? undefined,
         daily_contract_hours: (response.data as any).daily_contract_hours ?? undefined,
         hire_date: response.data.hire_date,
       };
@@ -136,7 +160,7 @@ const EmployeeDetail: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!id) return;
+    if (!id || !canMutate) return;
 
     try {
       if (formData.salary_type === '시급' && (!formData.hourly_wage || formData.hourly_wage <= 0)) {
@@ -146,6 +170,16 @@ const EmployeeDetail: React.FC = () => {
       if (formData.salary_type === '월급' && (!formData.monthly_salary || formData.monthly_salary <= 0)) {
         alert('월급을 입력해주세요.');
         return;
+      }
+      if (formData.salary_type === '일급') {
+        if (!formData.daily_wage_weekday || formData.daily_wage_weekday <= 0) {
+          alert('평일 일급을 입력해주세요.');
+          return;
+        }
+        if (!formData.daily_wage_weekend || formData.daily_wage_weekend <= 0) {
+          alert('주말 일급을 입력해주세요.');
+          return;
+        }
       }
 
       const updateData: any = {
@@ -189,6 +223,8 @@ const EmployeeDetail: React.FC = () => {
           updateData.hourly_wage = null;
         }
         updateData.monthly_salary = null;
+        updateData.daily_wage_weekday = null;
+        updateData.daily_wage_weekend = null;
       } else if (formData.salary_type === '월급') {
         if (formData.monthly_salary && formData.monthly_salary > 0) {
           updateData.monthly_salary = formData.monthly_salary;
@@ -196,6 +232,15 @@ const EmployeeDetail: React.FC = () => {
           updateData.monthly_salary = null;
         }
         updateData.hourly_wage = null;
+        updateData.daily_wage_weekday = null;
+        updateData.daily_wage_weekend = null;
+        updateData.daily_contract_hours = null;
+      } else if (formData.salary_type === '일급') {
+        updateData.daily_wage_weekday = formData.daily_wage_weekday;
+        updateData.daily_wage_weekend = formData.daily_wage_weekend;
+        updateData.hourly_wage = null;
+        updateData.monthly_salary = null;
+        updateData.daily_contract_hours = null;
       }
       
       const response = await employeeAPI.update(parseInt(id), updateData);
@@ -259,7 +304,7 @@ const EmployeeDetail: React.FC = () => {
   };
 
   const handleDelete = async () => {
-    if (!id) return;
+    if (!id || !canMutate) return;
     if (!window.confirm('정말 퇴사 처리하시겠습니까?')) return;
 
     try {
@@ -274,7 +319,7 @@ const EmployeeDetail: React.FC = () => {
   if (loading) {
     return (
       <div className="card">
-        <div className="loading">데이터를 불러오는 중...</div>
+        <div className="employee-detail-state employee-detail-state--loading loading">데이터를 불러오는 중...</div>
       </div>
     );
   }
@@ -282,143 +327,201 @@ const EmployeeDetail: React.FC = () => {
   if (error || !employee) {
     return (
       <div className="card">
-        <div className="error">{error || '직원 정보를 찾을 수 없습니다.'}</div>
-        <button className="btn btn-secondary" onClick={() => navigate('/employees')}>
-          목록으로 돌아가기
-        </button>
+        <div className="employee-detail-state">
+          <div className="employee-detail-state--error error">{error || '직원 정보를 찾을 수 없습니다.'}</div>
+          <button type="button" className="btn btn-secondary" onClick={() => navigate('/employees')}>
+            목록으로 돌아가기
+          </button>
+        </div>
       </div>
     );
   }
 
+  const emp = employee as Employee & {
+    gender?: string;
+    employment_type?: string;
+    benefit_type?: string;
+    daily_contract_hours?: number;
+    daily_wage_weekday?: number;
+    daily_wage_weekend?: number;
+  };
+  const avatarLetter = (emp.name?.trim()?.[0] || '?').toUpperCase();
+  const employment = employmentTypeLabel(emp.employment_type);
+
   return (
     <div className="card">
-      <div className="card-header">
-        <h2 className="card-title">직원 상세 정보</h2>
-        <div>
+      <div className="card-header employee-detail-card-header">
+        <h2 className="card-title">직원 상세</h2>
+        <div className="employee-detail-actions">
           {!isEditing ? (
             <>
-              <button className="btn btn-primary" onClick={() => setIsEditing(true)}>
-                수정
-              </button>
-              <button className="btn btn-danger" onClick={handleDelete} style={{ marginLeft: '0.5rem' }}>
-                퇴사 처리
-              </button>
+              {canMutate && (
+                <>
+                  <button type="button" className="btn btn-primary" onClick={() => setIsEditing(true)}>
+                    수정
+                  </button>
+                  <button type="button" className="btn btn-danger" onClick={handleDelete}>
+                    퇴사 처리
+                  </button>
+                </>
+              )}
             </>
           ) : (
-            <>
-              <button className="btn btn-secondary" onClick={() => setIsEditing(false)}>
+            canMutate && (
+              <button type="button" className="btn btn-secondary" onClick={() => setIsEditing(false)}>
                 취소
               </button>
-            </>
+            )
           )}
-          <button className="btn btn-secondary" onClick={() => navigate('/employees')} style={{ marginLeft: '0.5rem' }}>
+          <button type="button" className="btn btn-secondary" onClick={() => navigate('/employees')}>
             목록으로
           </button>
         </div>
       </div>
 
       {!isEditing ? (
-        <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-          <div className="employee-detail-grid">
-            <div className="detail-item">
-              <label>이름</label>
-              <div className="detail-value">{employee.name || '-'}</div>
+        <div className="employee-detail-page">
+          <header className="employee-detail-hero">
+            <div className="employee-detail-avatar" aria-hidden>
+              {avatarLetter}
             </div>
-            <div className="detail-item">
-              <label>연락처</label>
-              <div className="detail-value">{employee.phone || '-'}</div>
-            </div>
-            <div className="detail-item">
-              <label>주소</label>
-              <div className="detail-value">{employee.address || '-'}</div>
-            </div>
-            <div className="detail-item">
-              <label>주민등록번호</label>
-              <div className="detail-value">{employee.ssn || '-'}</div>
-            </div>
-            <div className="detail-item">
-              <label>생년월일</label>
-              <div className="detail-value">{employee.birth_date || '-'}</div>
-            </div>
-            <div className="detail-item">
-              <label>성별</label>
-              <div className="detail-value">{(employee as any).gender || '-'}</div>
-            </div>
-            <div className="detail-item">
-              <label>포지션</label>
-              <div className="detail-value">{employee.employee_position || '-'}</div>
-            </div>
-            <div className="detail-item">
-              <label>구분</label>
-              <div className="detail-value">
-                {((employee as any).employment_type === 'DAILY' && '일당') ||
-                  ((employee as any).employment_type === 'PART_TIME' && '파트') ||
-                  ((employee as any).employment_type === 'FULL_TIME' && '정직원') ||
-                  (employee as any).employment_type ||
-                  '-'}
-              </div>
-            </div>
-            <div className="detail-item">
-              <label>급여 형태</label>
-              <div className="detail-value">
-                {((employee as any).benefit_type === '3.3% 프리랜서' && '3.3% 프리랜서') ||
-                  ((employee as any).benefit_type === '4대보험' && '4대보험 근로자') ||
-                  (employee as any).benefit_type ||
-                  '-'}
-              </div>
-            </div>
-            <div className="detail-item">
-              <label>급여 형태</label>
-              <div className="detail-value">{employee.salary_type || '-'}</div>
-            </div>
-            <div className="detail-item">
-              <label>{employee.salary_type === '시급' ? '시급' : '월급'}</label>
-              <div className="detail-value">
-                {employee.salary_type === '시급'
-                  ? `${employee.hourly_wage?.toLocaleString() || 0}원/시간`
-                  : `${employee.monthly_salary?.toLocaleString() || 0}원/월`}
-              </div>
-            </div>
-            {employee.salary_type === '시급' && (
-              <div className="detail-item">
-                <label>일 근무 계약시간</label>
-                <div className="detail-value">
-                  {(employee as any).daily_contract_hours != null ? `${(employee as any).daily_contract_hours}시간` : '-'}
-                </div>
-              </div>
-            )}
-            <div className="detail-item">
-              <label>입사일</label>
-              <div className="detail-value">{employee.hire_date || '-'}</div>
-            </div>
-            <div className="detail-item">
-              <label>퇴사일</label>
-              <div className="detail-value">{employee.resign_date || '-'}</div>
-            </div>
-            <div className="detail-item">
-              <label>상태</label>
-              <div className="detail-value">
-                <span className={`status-badge ${employee.status === '재직' ? 'active' : 'inactive'}`}>
-                  {employee.status || '-'}
+            <div className="employee-detail-hero-main">
+              <h1 className="employee-detail-name">{emp.name || '이름 없음'}</h1>
+              <div className="employee-detail-tags">
+                <span className="employee-detail-tag employee-detail-tag--position">{emp.employee_position || '—'}</span>
+                <span className="employee-detail-tag">{employment}</span>
+                <span
+                  className={
+                    emp.status === '재직'
+                      ? 'employee-detail-tag employee-detail-tag--status-active'
+                      : 'employee-detail-tag employee-detail-tag--status-inactive'
+                  }
+                >
+                  {emp.status || '—'}
                 </span>
               </div>
             </div>
+          </header>
+
+          <div className="employee-detail-panels">
+            <section className="employee-detail-panel">
+              <h3 className="employee-detail-panel-title">기본 정보</h3>
+              <dl className="employee-detail-dl">
+                <div className="employee-detail-row">
+                  <dt>연락처</dt>
+                  <dd className={emp.phone ? '' : 'employee-detail-value--muted'}>{emp.phone || '미등록'}</dd>
+                </div>
+                <div className="employee-detail-row">
+                  <dt>주소</dt>
+                  <dd className={emp.address ? '' : 'employee-detail-value--muted'}>{emp.address || '미등록'}</dd>
+                </div>
+                <div className="employee-detail-row">
+                  <dt>주민등록번호</dt>
+                  <dd className={emp.ssn ? '' : 'employee-detail-value--muted'}>{emp.ssn || '미등록'}</dd>
+                </div>
+                <div className="employee-detail-row">
+                  <dt>생년월일</dt>
+                  <dd className={emp.birth_date ? '' : 'employee-detail-value--muted'}>{emp.birth_date || '—'}</dd>
+                </div>
+                <div className="employee-detail-row">
+                  <dt>성별</dt>
+                  <dd className={emp.gender ? '' : 'employee-detail-value--muted'}>{emp.gender || '—'}</dd>
+                </div>
+              </dl>
+            </section>
+
+            <section className="employee-detail-panel">
+              <h3 className="employee-detail-panel-title">근무 · 급여</h3>
+              <dl className="employee-detail-dl">
+                <div className="employee-detail-row">
+                  <dt>고용 구분</dt>
+                  <dd>
+                    <span className="employee-detail-pill employee-detail-pill--violet">{employment}</span>
+                  </dd>
+                </div>
+                <div className="employee-detail-row">
+                  <dt>보험 · 세금</dt>
+                  <dd className={emp.benefit_type ? '' : 'employee-detail-value--muted'}>
+                    {benefitTypeLabel(emp.benefit_type)}
+                  </dd>
+                </div>
+                <div className="employee-detail-row">
+                  <dt>급여 유형</dt>
+                  <dd>
+                    <span className="employee-detail-pill employee-detail-pill--amber">{emp.salary_type || '—'}</span>
+                  </dd>
+                </div>
+                {emp.salary_type === '시급' && (
+                  <div className="employee-detail-row">
+                    <dt>시급</dt>
+                    <dd className="employee-detail-money">{`${(emp.hourly_wage ?? 0).toLocaleString()}원`} / 시간</dd>
+                  </div>
+                )}
+                {emp.salary_type === '월급' && (
+                  <div className="employee-detail-row">
+                    <dt>월급</dt>
+                    <dd className="employee-detail-money">{`${(emp.monthly_salary ?? 0).toLocaleString()}원`} / 월</dd>
+                  </div>
+                )}
+                {emp.salary_type === '일급' && (
+                  <>
+                    <div className="employee-detail-row">
+                      <dt>평일 일급</dt>
+                      <dd className="employee-detail-money">
+                        {(emp.daily_wage_weekday ?? 0).toLocaleString()}원 <span className="employee-detail-value--muted">/ 일 (월~금)</span>
+                      </dd>
+                    </div>
+                    <div className="employee-detail-row">
+                      <dt>주말 일급</dt>
+                      <dd className="employee-detail-money">
+                        {(emp.daily_wage_weekend ?? 0).toLocaleString()}원 <span className="employee-detail-value--muted">/ 일 (토·일)</span>
+                      </dd>
+                    </div>
+                  </>
+                )}
+                {emp.salary_type === '시급' && (
+                  <div className="employee-detail-row">
+                    <dt>일 근무 계약시간</dt>
+                    <dd>
+                      {emp.daily_contract_hours != null ? `${emp.daily_contract_hours}시간` : <span className="employee-detail-value--muted">미지정 (기본 10h·주말 11h)</span>}
+                    </dd>
+                  </div>
+                )}
+              </dl>
+            </section>
+
+            <section className="employee-detail-panel">
+              <h3 className="employee-detail-panel-title">재직 이력</h3>
+              <dl className="employee-detail-dl">
+                <div className="employee-detail-row">
+                  <dt>입사일</dt>
+                  <dd>{emp.hire_date || '—'}</dd>
+                </div>
+                <div className="employee-detail-row">
+                  <dt>퇴사일</dt>
+                  <dd className={emp.resign_date ? '' : 'employee-detail-value--muted'}>{emp.resign_date || '—'}</dd>
+                </div>
+              </dl>
+            </section>
           </div>
 
-          <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid #e0e0e0' }}>
-            <h3 style={{ marginBottom: '1rem', fontSize: '1.25rem', fontWeight: 600 }}>서류</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
+          <section className="employee-detail-panel employee-detail-documents-panel">
+            <h3 className="employee-detail-panel-title">등록 서류</h3>
+            <div className="employee-detail-doc-grid">
               {documents.map((doc) => (
-                <div key={doc.id} style={{ border: '1px solid #e0e0e0', borderRadius: '8px', padding: '1rem', background: '#f8f9fa' }}>
-                  <div style={{ marginBottom: '0.75rem' }}>
-                    <strong>{doc.document_type}</strong>
+                <article key={doc.id} className="employee-detail-doc-card">
+                  <div className="employee-detail-doc-card-title">
+                    <span className="icon" aria-hidden>
+                      {doc.document_type === '보건증' ? '📋' : '📄'}
+                    </span>
+                    {doc.document_type}
                   </div>
                   {doc.file_url && (
-                    <div style={{ marginBottom: '0.75rem' }}>
-                      <img 
-                        src={`${API_BASE_URL}${doc.file_url}`} 
+                    <div className="employee-detail-doc-thumb-wrap">
+                      <img
+                        src={`${API_BASE_URL}${doc.file_url}`}
                         alt={doc.document_type}
-                        style={{ width: '100%', maxHeight: '200px', objectFit: 'contain', borderRadius: '4px', border: '1px solid #ddd', cursor: 'pointer' }}
+                        className="employee-detail-doc-thumb"
                         onClick={() => {
                           const newWindow = window.open('', '_blank');
                           if (newWindow) {
@@ -442,35 +545,20 @@ const EmployeeDetail: React.FC = () => {
                       />
                     </div>
                   )}
-                  {doc.issue_date && (
-                    <div style={{ fontSize: '0.875rem', color: '#666', marginBottom: '0.25rem' }}>
-                      발급일: {doc.issue_date}
-                    </div>
-                  )}
-                  {doc.expiry_date && (
-                    <div style={{ fontSize: '0.875rem', color: '#666', marginBottom: '0.5rem' }}>
-                      만료일: {doc.expiry_date}
-                    </div>
-                  )}
-                  <button
-                    className="btn btn-secondary"
-                    onClick={() => printDocument(doc)}
-                    style={{ width: '100%', marginTop: '0.5rem' }}
-                  >
+                  {doc.issue_date && <div className="employee-detail-doc-meta">발급일 {doc.issue_date}</div>}
+                  {doc.expiry_date && <div className="employee-detail-doc-meta">만료일 {doc.expiry_date}</div>}
+                  <button type="button" className="btn btn-secondary" onClick={() => printDocument(doc)} style={{ width: '100%', marginTop: '0.35rem' }}>
                     A4 출력
                   </button>
-                </div>
+                </article>
               ))}
-              {documents.length === 0 && (
-                <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '2rem', color: '#999' }}>
-                  등록된 서류가 없습니다.
-                </div>
-              )}
+              {documents.length === 0 && <div className="employee-detail-doc-empty">등록된 서류가 없습니다. 수정 화면에서 보건증·근로계약서를 추가할 수 있습니다.</div>}
             </div>
-          </div>
+          </section>
         </div>
       ) : (
-        <form onSubmit={handleSubmit} style={{ maxWidth: '800px', margin: '0 auto' }}>
+        <form onSubmit={handleSubmit} className="employee-detail-form-shell">
+          <p className="employee-detail-form-section-title">인적 사항</p>
           <div className="form-grid">
             <div className="form-group">
               <label className="form-label">이름 *</label>
@@ -532,6 +620,11 @@ const EmployeeDetail: React.FC = () => {
                 <option value="여">여</option>
               </select>
             </div>
+            <div className="form-group full-width" style={{ marginBottom: 0 }}>
+              <p className="employee-detail-form-section-title" style={{ marginTop: '0.25rem' }}>
+                근무 · 급여
+              </p>
+            </div>
             <div className="form-group">
               <label className="form-label">포지션 *</label>
               <select
@@ -547,7 +640,7 @@ const EmployeeDetail: React.FC = () => {
               </select>
             </div>
             <div className="form-group">
-              <label className="form-label">구분 *</label>
+              <label className="form-label">고용 구분 *</label>
               <select
                 className="form-select"
                 value={(formData as any).employment_type || 'FULL_TIME'}
@@ -565,7 +658,7 @@ const EmployeeDetail: React.FC = () => {
               </select>
             </div>
             <div className="form-group">
-              <label className="form-label">급여 형태 *</label>
+              <label className="form-label">보험 · 세금 *</label>
               <select
                 className="form-select"
                 value={(formData as any).benefit_type || '4대보험'}
@@ -582,26 +675,30 @@ const EmployeeDetail: React.FC = () => {
               </select>
             </div>
             <div className="form-group">
-              <label className="form-label">급여 형태 *</label>
+              <label className="form-label">급여 유형 *</label>
               <select
                 className="form-select"
                 value={formData.salary_type}
                 onChange={(e) => {
-                  const salaryType = e.target.value as '시급' | '월급';
+                  const salaryType = e.target.value as '시급' | '월급' | '일급';
                   setFormData({
                     ...formData,
                     salary_type: salaryType,
                     hourly_wage: salaryType === '시급' ? (formData.hourly_wage || 0) : undefined,
                     monthly_salary: salaryType === '월급' ? (formData.monthly_salary || 0) : undefined,
+                    daily_wage_weekday: salaryType === '일급' ? formData.daily_wage_weekday : undefined,
+                    daily_wage_weekend: salaryType === '일급' ? formData.daily_wage_weekend : undefined,
+                    daily_contract_hours: salaryType === '시급' ? formData.daily_contract_hours : undefined,
                   });
                 }}
                 required
               >
                 <option value="시급">시급</option>
                 <option value="월급">월급</option>
+                <option value="일급">일급</option>
               </select>
             </div>
-            {formData.salary_type === '시급' ? (
+            {formData.salary_type === '시급' && (
               <div className="form-group">
                 <label className="form-label">시급 *</label>
                 <input
@@ -613,7 +710,8 @@ const EmployeeDetail: React.FC = () => {
                   min="0"
                 />
               </div>
-            ) : (
+            )}
+            {formData.salary_type === '월급' && (
               <div className="form-group">
                 <label className="form-label">월급 *</label>
                 <input
@@ -625,6 +723,44 @@ const EmployeeDetail: React.FC = () => {
                   min="0"
                 />
               </div>
+            )}
+            {formData.salary_type === '일급' && (
+              <>
+                <div className="form-group">
+                  <label className="form-label">평일 일급 (월~금 출근) *</label>
+                  <input
+                    type="number"
+                    className="form-input"
+                    value={formData.daily_wage_weekday ?? ''}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        daily_wage_weekday: e.target.value ? Number(e.target.value) : undefined,
+                      })
+                    }
+                    required
+                    min="0"
+                    placeholder="예: 180000"
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">주말 일급 (토·일 출근) *</label>
+                  <input
+                    type="number"
+                    className="form-input"
+                    value={formData.daily_wage_weekend ?? ''}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        daily_wage_weekend: e.target.value ? Number(e.target.value) : undefined,
+                      })
+                    }
+                    required
+                    min="0"
+                    placeholder="예: 200000"
+                  />
+                </div>
+              </>
             )}
             {formData.salary_type === '시급' && (
               <div className="form-group">
@@ -653,11 +789,9 @@ const EmployeeDetail: React.FC = () => {
             </div>
           </div>
 
-          <hr style={{ margin: '1.5rem 0', border: 'none', borderTop: '1px solid #e0e0e0' }} />
+          <p className="employee-detail-form-section-title">서류 업로드 (선택)</p>
 
-          <h4 style={{ marginBottom: '1rem', textAlign: 'center' }}>서류 업로드 (선택사항)</h4>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <div className="form-grid">
             <div className="form-group">
               <label className="form-label">보건증 사진</label>
               <input

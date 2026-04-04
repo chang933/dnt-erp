@@ -52,6 +52,8 @@ def create_employee(
         salary_type=employee.salary_type,
         hourly_wage=employee.hourly_wage,
         monthly_salary=employee.monthly_salary,
+        daily_wage_weekday=getattr(employee, "daily_wage_weekday", None),
+        daily_wage_weekend=getattr(employee, "daily_wage_weekend", None),
         daily_contract_hours=getattr(employee, 'daily_contract_hours', None),
         hire_date=employee.hire_date,
         status=EmployeeStatus.ACTIVE

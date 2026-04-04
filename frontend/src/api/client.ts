@@ -267,11 +267,14 @@ export const foodCostAPI = {
     apiClient.post('/food-costs/sync-kitchen-expense-range', null, { params }),
 };
 
+export type AccessMode = 'full' | 'readonly' | 'staff_ingredients';
+
 export interface UserMe {
   id: number;
   username: string;
   is_admin: boolean;
   is_active: boolean;
+  access_mode?: AccessMode;
 }
 
 export const authAPI = {

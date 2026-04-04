@@ -124,6 +124,7 @@ def _seed_bootstrap_admin() -> None:
             existing.password_hash = get_password_hash(pwd)
             existing.is_active = True
             existing.is_admin = True
+            existing.access_mode = "full"
             db.commit()
             return
         user_crud.create_user(
@@ -131,7 +132,43 @@ def _seed_bootstrap_admin() -> None:
             username=name,
             password=pwd,
             is_admin=True,
+            access_mode="full",
         )
+    finally:
+        db.close()
+
+
+def _seed_fixed_role_accounts() -> None:
+    """
+    admin24: 조회 전용 / admin: 직원·식자재만(매출·정산 등 API 차단).
+    매 기동 시 비밀번호·access_mode·활성 상태를 위 값으로 맞춤(고정 계정).
+    """
+    from app.db.session import SessionLocal
+    from app.crud import user as user_crud
+    from app.core.security import get_password_hash
+
+    fixed = [
+        ("admin24", "1234", "readonly", False),
+        ("admin", "1234", "staff_ingredients", False),
+    ]
+    db = SessionLocal()
+    try:
+        for username, password, mode, is_adm in fixed:
+            u = user_crud.get_user_by_username(db, username)
+            if u:
+                u.password_hash = get_password_hash(password)
+                u.is_active = True
+                u.is_admin = is_adm
+                u.access_mode = mode
+            else:
+                user_crud.create_user(
+                    db,
+                    username=username,
+                    password=password,
+                    is_admin=is_adm,
+                    access_mode=mode,
+                )
+        db.commit()
     finally:
         db.close()
 
@@ -154,10 +191,15 @@ def _ensure_dev_dowon_user() -> None:
             u.password_hash = get_password_hash("123123")
             u.is_active = True
             u.is_admin = True
+            u.access_mode = "full"
             db.commit()
         else:
             user_crud.create_user(
-                db, username="dowon", password="123123", is_admin=True
+                db,
+                username="dowon",
+                password="123123",
+                is_admin=True,
+                access_mode="full",
             )
     finally:
         db.close()
@@ -173,6 +215,7 @@ def on_startup():
     multi_store_migrate.run(engine)
     _seed_bootstrap_admin()
     _ensure_dev_dowon_user()
+    _seed_fixed_role_accounts()
 
 
 @app.get("/")
@@ -223,7 +266,7 @@ except Exception:
 
 # API 라우터 등록 (로그인 제외 전부 Bearer 인증)
 from fastapi import Depends
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user_with_access
 from app.api.v1 import (
     auth as auth_router,
     stores as stores_router,
@@ -234,7 +277,7 @@ from app.api.v1 import (
 )
 from app.api.v1 import employees_upload, documents_generate
 
-_require_login = [Depends(get_current_user)]
+_require_login = [Depends(get_current_user_with_access)]
 
 app.include_router(auth_router.router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(stores_router.router, prefix="/api/v1/stores", tags=["stores"], dependencies=_require_login)

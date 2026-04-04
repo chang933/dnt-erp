@@ -16,6 +16,7 @@ class UserMe(BaseModel):
     username: str
     is_admin: bool
     is_active: bool
+    access_mode: str = "full"
 
     class Config:
         from_attributes = True
