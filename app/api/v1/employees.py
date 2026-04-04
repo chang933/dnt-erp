@@ -50,16 +50,12 @@ def _handle_db_error(e: Exception):
 
 
 def _employee_response(db_employee, db: Session) -> dict:
-    """응답 dict에 ssn 반드시 포함 (Pydantic 직렬화 + DB에서 ssn 재조회)"""
+    """직원 1건 JSON (ORM 컬럼 그대로 직렬화 — 목록 N+1 방지, ssn은 모델 매핑 사용)"""
     data = Employee.model_validate(db_employee).model_dump(mode="json")
-    # ssn은 DB에서 직접 조회해 넣기 (ORM에 안 잡혀 있을 수 있음)
-    try:
-        row = db.execute(
-            text("SELECT ssn FROM erp_employees WHERE id = :id"),
-            {"id": db_employee.id}
-        ).fetchone()
-        data["ssn"] = (str(row[0]).strip() or None) if (row and row[0] is not None) else None
-    except Exception:
+    raw_ssn = getattr(db_employee, "ssn", None)
+    if raw_ssn is not None and str(raw_ssn).strip():
+        data["ssn"] = str(raw_ssn).strip()
+    else:
         data["ssn"] = None
     return data
 

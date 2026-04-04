@@ -95,31 +95,24 @@ def get_documents(
     db: Session = Depends(get_db),
     store_id: int = Depends(get_store_id),
 ):
-    """서류 목록 조회"""
+    """서류 목록 조회 (직원 join 1회 — N+1 제거)"""
+    from sqlalchemy.orm import joinedload
+
+    query = (
+        db.query(DocumentModel)
+        .options(joinedload(DocumentModel.employee))
+        .filter(DocumentModel.store_id == store_id)
+    )
     if employee_id:
-        documents = crud_document.get_documents_by_employee(
-            db=db,
-            store_id=store_id,
-            employee_id=employee_id,
-            document_type=document_type,
-        )
-    else:
-        query = db.query(DocumentModel).filter(DocumentModel.store_id == store_id)
-        if document_type:
-            query = query.filter(DocumentModel.document_type == document_type)
-        documents = query.order_by(DocumentModel.created_at.desc()).limit(1000).all()
+        query = query.filter(DocumentModel.employee_id == employee_id)
+    if document_type:
+        query = query.filter(DocumentModel.document_type == document_type)
+    documents = query.order_by(DocumentModel.created_at.desc()).limit(1000).all()
 
     result = []
     for doc in documents:
-        employee = (
-            db.query(Employee)
-            .filter(
-                Employee.id == doc.employee_id,
-                Employee.store_id == store_id,
-            )
-            .first()
-        )
-        if employee:
+        emp = doc.employee
+        if emp and getattr(emp, "store_id", store_id) == store_id:
             result.append(
                 DocumentWithEmployee(
                     id=doc.id,
@@ -129,7 +122,7 @@ def get_documents(
                     issue_date=doc.issue_date,
                     expiry_date=doc.expiry_date,
                     created_at=doc.created_at,
-                    employee_name=employee.name,
+                    employee_name=emp.name,
                 )
             )
 

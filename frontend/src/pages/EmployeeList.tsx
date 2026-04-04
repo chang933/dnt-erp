@@ -9,12 +9,16 @@ const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:800
 
 type EmploymentFilter = 'ALL' | 'FULL_TIME' | 'PART_TIME' | 'DAILY';
 
-function normalizeEmployeeList(payload: any): Employee[] {
+function normalizeList<T>(payload: any): T[] {
   if (Array.isArray(payload)) return payload;
   if (Array.isArray(payload?.items)) return payload.items;
   if (Array.isArray(payload?.data)) return payload.data;
   if (Array.isArray(payload?.results)) return payload.results;
   return [];
+}
+
+function normalizeEmployeeList(payload: any): Employee[] {
+  return normalizeList<Employee>(payload);
 }
 
 /** API 실패 시 사용자에게 보여 줄 본문 + 배포/로컬 안내 */
@@ -97,19 +101,25 @@ const EmployeeList: React.FC = () => {
         setDocumentsMap({});
         return;
       }
+      const idSet = new Set(employees.map((e) => e.id));
       const docsMap: Record<number, Document[]> = {};
-      for (const employee of employees) {
-        try {
-          const response = await documentAPI.getByEmployee(employee.id);
-          docsMap[employee.id] = response.data || [];
-        } catch (err) {
-          console.error(`직원 ${employee.id}의 서류 정보 로딩 에러:`, err);
-          docsMap[employee.id] = [];
-        }
+      employees.forEach((e) => {
+        docsMap[e.id] = [];
+      });
+      try {
+        const response = await documentAPI.getAll();
+        const allDocs = normalizeList<Document>(response.data);
+        allDocs.forEach((doc: Document) => {
+          if (idSet.has(doc.employee_id)) {
+            docsMap[doc.employee_id].push(doc);
+          }
+        });
+      } catch (err) {
+        console.error('서류 일괄 로딩 에러:', err);
       }
       setDocumentsMap(docsMap);
     };
-    
+
     if (employees.length > 0) {
       fetchDocuments();
     }

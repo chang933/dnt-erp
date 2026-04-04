@@ -1,7 +1,8 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, extract
+from sqlalchemy import and_
 from typing import List, Optional
 from datetime import date
+from calendar import monthrange
 from app.models.schedule import Schedule
 from app.schemas.schedule import ScheduleCreate, ScheduleUpdate
 
@@ -59,13 +60,15 @@ def get_schedules_by_month(
     year: int,
     month: int,
 ) -> List[Schedule]:
-    """특정 월의 모든 스케줄 조회"""
+    """특정 월의 모든 스케줄 조회 (날짜 범위 — (store_id, date) 인덱스 활용)"""
+    start = date(year, month, 1)
+    end = date(year, month, monthrange(year, month)[1])
     return (
         db.query(Schedule)
         .filter(
             Schedule.store_id == store_id,
-            extract("year", Schedule.date) == year,
-            extract("month", Schedule.date) == month,
+            Schedule.date >= start,
+            Schedule.date <= end,
         )
         .order_by(Schedule.date, Schedule.employee_id)
         .all()

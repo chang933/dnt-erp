@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { employeeAPI, scheduleAPI } from '../api/client';
 import { Employee } from '../types';
 import { useWindowWidth } from '../hooks/useWindowWidth';
@@ -9,6 +9,68 @@ function normalizeList<T>(payload: any): T[] {
   if (Array.isArray(payload?.data)) return payload.data;
   if (Array.isArray(payload?.results)) return payload.results;
   return [];
+}
+
+function buildWeeklyScheduleMaps(
+  employeeList: Employee[],
+  allSchedules: any[],
+  allWeekDateStrs: string[]
+): {
+  newSelections: Record<number, Set<string>>;
+  newExtraHours: Record<number, Record<string, number>>;
+} {
+  const byEmployeeId = new Map<number, any[]>();
+  allSchedules.forEach((schedule: any) => {
+    const eid = schedule.employee_id as number;
+    if (!byEmployeeId.has(eid)) byEmployeeId.set(eid, []);
+    byEmployeeId.get(eid)!.push(schedule);
+  });
+
+  const newSelections: Record<number, Set<string>> = {};
+  const newExtraHours: Record<number, Record<string, number>> = {};
+
+  for (const employee of employeeList) {
+    const isDaily = (employee as any).employment_type === 'DAILY';
+    const schedules = byEmployeeId.get(employee.id) ?? [];
+    const holidayDates = new Set<string>();
+    const empExtra: Record<string, number> = {};
+    schedules.forEach((schedule: any) => {
+      const raw = schedule.date ?? schedule.schedule_date ?? '';
+      const scheduleDate = typeof raw === 'string' ? raw.slice(0, 10) : raw;
+      if (scheduleDate && scheduleDate.length === 10) {
+        if (schedule.schedule_type === '휴무') {
+          holidayDates.add(scheduleDate);
+        }
+        empExtra[scheduleDate] = Number(schedule.extra_hours ?? 0);
+      }
+    });
+    if (isDaily && schedules.length === 0) {
+      allWeekDateStrs.forEach((ds) => holidayDates.add(ds));
+    }
+    newSelections[employee.id] = holidayDates;
+    newExtraHours[employee.id] = empExtra;
+  }
+  return { newSelections, newExtraHours };
+}
+
+function getWeekDates(weekOffset: number) {
+  const today = new Date();
+  const currentDay = today.getDay();
+  const diffToMonday = currentDay === 0 ? -6 : 1 - currentDay;
+  const mondayDate = today.getDate() + diffToMonday + weekOffset * 7;
+  const monday = new Date(today.getFullYear(), today.getMonth(), mondayDate);
+  const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+  const dates: Array<{ date: Date; dateStr: string; dayName: string }> = [];
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
+    const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    dates.push({
+      date,
+      dateStr,
+      dayName: dayNames[date.getDay()],
+    });
+  }
+  return dates;
 }
 
 const WeeklySchedule: React.FC = () => {
@@ -22,124 +84,58 @@ const WeeklySchedule: React.FC = () => {
   const [selectedDays, setSelectedDays] = useState<Record<number, Set<string>>>({});
   /** 시급 직원만: 직원별·날짜별 추가 근무 시간(시간 단위) */
   const [extraHours, setExtraHours] = useState<Record<number, Record<string, number>>>({});
+  const employeesRef = useRef<Employee[]>([]);
+  employeesRef.current = employees;
 
+  /** 주 변경 시 직원+스케줄 중복 요청 제거, 최초엔 병렬 로드 */
   useEffect(() => {
-    fetchEmployees();
-  }, []);
-
-  useEffect(() => {
-    if (employees.length > 0) {
-      loadExistingSchedules();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedWeek]);
-
-  const fetchEmployees = async () => {
-    try {
+    let cancelled = false;
+    (async () => {
       setLoading(true);
-      const response = await employeeAPI.getAll({ status: '재직' });
-      const employeeList = normalizeList<Employee>(response.data);
-      setEmployees(employeeList);
-      const initialSelections: Record<number, Set<string>> = {};
-      employeeList.forEach((emp: Employee) => {
-        initialSelections[emp.id] = new Set<string>();
-      });
-      setSelectedDays(initialSelections);
-      if (employeeList.length > 0) {
-        await loadExistingSchedules(employeeList);
-      }
-    } catch (err: any) {
-      console.error('직원 목록 로딩 에러:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadExistingSchedules = async (employeeList?: Employee[]) => {
-    try {
-      const employeesToUse = employeeList || employees;
-      if (employeesToUse.length === 0) {
-        return;
-      }
-
       const weekDates = getWeekDates(selectedWeek);
       const startDate = weekDates[0].dateStr;
       const endDate = weekDates[6].dateStr;
       const allWeekDateStrs = weekDates.map((d) => d.dateStr);
-
-      const newSelections: Record<number, Set<string>> = {};
-      const newExtraHours: Record<number, Record<string, number>> = {};
-
-      /** 직원별 N번 호출 대신 주 단위 1회 조회 (네트워크·서버 부하 대폭 감소) */
-      let allSchedules: any[] = [];
       try {
-        const response = await scheduleAPI.getAll({
-          start_date: startDate,
-          end_date: endDate,
-        });
-        allSchedules = normalizeList<any>(response.data);
-      } catch (err) {
-        console.error('주간 스케줄 일괄 로딩 실패:', err);
-        allSchedules = [];
-      }
+        let employeeList = employeesRef.current;
+        let allSchedules: any[] = [];
 
-      const byEmployeeId = new Map<number, any[]>();
-      allSchedules.forEach((schedule: any) => {
-        const eid = schedule.employee_id as number;
-        if (!byEmployeeId.has(eid)) byEmployeeId.set(eid, []);
-        byEmployeeId.get(eid)!.push(schedule);
-      });
-
-      for (const employee of employeesToUse) {
-        const isDaily = (employee as any).employment_type === 'DAILY';
-        const schedules = byEmployeeId.get(employee.id) ?? [];
-
-        const holidayDates = new Set<string>();
-        const empExtra: Record<string, number> = {};
-        schedules.forEach((schedule: any) => {
-          const raw = schedule.date ?? schedule.schedule_date ?? '';
-          const scheduleDate = typeof raw === 'string' ? raw.slice(0, 10) : raw;
-          if (scheduleDate && scheduleDate.length === 10) {
-            if (schedule.schedule_type === '휴무') {
-              holidayDates.add(scheduleDate);
-            }
-            empExtra[scheduleDate] = Number(schedule.extra_hours ?? 0);
-          }
-        });
-        if (isDaily && schedules.length === 0) {
-          allWeekDateStrs.forEach((ds) => holidayDates.add(ds));
+        if (employeeList.length === 0) {
+          const [empRes, schRes] = await Promise.all([
+            employeeAPI.getAll({ status: '재직' }),
+            scheduleAPI.getAll({ start_date: startDate, end_date: endDate }).catch(() => ({ data: [] })),
+          ]);
+          if (cancelled) return;
+          employeeList = normalizeList<Employee>(empRes.data);
+          setEmployees(employeeList);
+          allSchedules = normalizeList<any>(schRes.data);
+        } else {
+          const schRes = await scheduleAPI
+            .getAll({ start_date: startDate, end_date: endDate })
+            .catch(() => ({ data: [] }));
+          if (cancelled) return;
+          allSchedules = normalizeList<any>(schRes.data);
         }
-        newSelections[employee.id] = holidayDates;
-        newExtraHours[employee.id] = empExtra;
+
+        const { newSelections, newExtraHours } = buildWeeklyScheduleMaps(
+          employeeList,
+          allSchedules,
+          allWeekDateStrs
+        );
+        if (!cancelled) {
+          setSelectedDays(newSelections);
+          setExtraHours(newExtraHours);
+        }
+      } catch (err: any) {
+        if (!cancelled) console.error('주간 스케줄 로딩 에러:', err);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-
-      setSelectedDays(newSelections);
-      setExtraHours(newExtraHours);
-    } catch (err) {
-      console.error('기존 스케줄 로딩 실패:', err);
-    }
-  };
-
-  const getWeekDates = (weekOffset: number) => {
-    const today = new Date();
-    const currentDay = today.getDay();
-    const diffToMonday = currentDay === 0 ? -6 : 1 - currentDay;
-    const mondayDate = today.getDate() + diffToMonday + (weekOffset * 7);
-    const monday = new Date(today.getFullYear(), today.getMonth(), mondayDate);
-
-    const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
-    const dates: Array<{ date: Date; dateStr: string; dayName: string }> = [];
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
-      const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-      dates.push({
-        date,
-        dateStr,
-        dayName: dayNames[date.getDay()],
-      });
-    }
-    return dates;
-  };
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedWeek]);
 
   const WEEK_OFFSETS = [-4, -3, -2, -1, 0, 1, 2, 3, 4] as const;
   const getWeekLabel = (offset: number) => {
@@ -180,6 +176,21 @@ const WeeklySchedule: React.FC = () => {
     });
   };
 
+  const refreshSchedulesFromServer = async () => {
+    const weekDates = getWeekDates(selectedWeek);
+    const schRes = await scheduleAPI
+      .getAll({ start_date: weekDates[0].dateStr, end_date: weekDates[6].dateStr })
+      .catch(() => ({ data: [] }));
+    const allWeekDateStrs = weekDates.map((d) => d.dateStr);
+    const { newSelections, newExtraHours: nextExtra } = buildWeeklyScheduleMaps(
+      employees,
+      normalizeList<any>(schRes.data),
+      allWeekDateStrs
+    );
+    setSelectedDays(newSelections);
+    setExtraHours(nextExtra);
+  };
+
   const saveSchedule = async (employeeId: number, weekDates: Array<{ date: Date; dateStr: string; dayName: string }>) => {
     try {
       const selectedDaysForEmployee = selectedDays[employeeId] || new Set<string>();
@@ -189,11 +200,8 @@ const WeeklySchedule: React.FC = () => {
         return;
       }
 
-      let successCount = 0;
-      let failCount = 0;
       const errors: string[] = [];
-      
-      for (const { dateStr } of weekDates) {
+      const tasks = weekDates.map(({ dateStr }) => {
         const isHoliday = selectedDaysForEmployee.has(dateStr);
         const addHours = (extraHours[employeeId] ?? {})[dateStr] ?? 0;
         const scheduleData: any = {
@@ -205,23 +213,32 @@ const WeeklySchedule: React.FC = () => {
         if (!isHoliday) {
           scheduleData.extra_hours = addHours;
         }
-        
-        try {
-          await scheduleAPI.create(scheduleData);
-          successCount++;
-        } catch (err: any) {
-          const errorMsg = err.response?.data?.detail || err.message || '알 수 없는 오류';
-          errors.push(`${dateStr}: ${errorMsg}`);
+        return scheduleAPI.create(scheduleData).then(
+          () => ({ ok: true as const, dateStr }),
+          (err: any) => ({
+            ok: false as const,
+            dateStr,
+            msg: err.response?.data?.detail || err.message || '알 수 없는 오류',
+          })
+        );
+      });
+      const settled = await Promise.all(tasks);
+      let successCount = 0;
+      let failCount = 0;
+      settled.forEach((r) => {
+        if (r.ok) successCount++;
+        else {
           failCount++;
+          errors.push(`${r.dateStr}: ${r.msg}`);
         }
-      }
+      });
 
       if (failCount === 0) {
         alert(`스케줄이 성공적으로 저장되었습니다.\n(저장된 항목: ${successCount}개)`);
-        await loadExistingSchedules();
+        await refreshSchedulesFromServer();
       } else if (successCount > 0) {
         alert(`일부 스케줄 저장 완료\n성공: ${successCount}개\n실패: ${failCount}개\n\n실패 상세:\n${errors.join('\n')}`);
-        await loadExistingSchedules();
+        await refreshSchedulesFromServer();
       } else {
         alert(`스케줄 저장에 실패했습니다.\n\n실패 상세:\n${errors.join('\n')}`);
       }

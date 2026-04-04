@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
-from sqlalchemy import extract
 from typing import List, Optional, Any
 from datetime import date
+from calendar import monthrange
 from app.db.session import get_db
 from app.api.deps import get_store_id
 from app.schemas.schedule import Schedule, ScheduleCreate, ScheduleUpdate, ScheduleWithEmployee
@@ -103,18 +103,23 @@ def get_schedules_by_month_with_employee(
     db: Session = Depends(get_db),
     store_id: int = Depends(get_store_id),
 ):
-    """특정 월의 모든 스케줄 조회 (직원 정보 포함)"""
+    """특정 월의 모든 스케줄 조회 (직원 정보 포함, 날짜 범위로 인덱스 활용)"""
     from sqlalchemy.orm import joinedload
     from app.models.schedule import Schedule as ScheduleModel
-    
-    # 직원 정보를 join해서 가져오기
-    schedules = db.query(ScheduleModel).options(
-        joinedload(ScheduleModel.employee)
-    ).filter(
-        ScheduleModel.store_id == store_id,
-        extract('year', ScheduleModel.date) == year,
-        extract('month', ScheduleModel.date) == month
-    ).order_by(ScheduleModel.date, ScheduleModel.employee_id).all()
+
+    month_start = date(year, month, 1)
+    month_end = date(year, month, monthrange(year, month)[1])
+    schedules = (
+        db.query(ScheduleModel)
+        .options(joinedload(ScheduleModel.employee))
+        .filter(
+            ScheduleModel.store_id == store_id,
+            ScheduleModel.date >= month_start,
+            ScheduleModel.date <= month_end,
+        )
+        .order_by(ScheduleModel.date, ScheduleModel.employee_id)
+        .all()
+    )
     
     # 직원 정보를 포함한 응답 생성
     result = []
