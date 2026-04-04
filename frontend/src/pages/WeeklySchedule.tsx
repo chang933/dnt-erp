@@ -70,39 +70,47 @@ const WeeklySchedule: React.FC = () => {
       const newSelections: Record<number, Set<string>> = {};
       const newExtraHours: Record<number, Record<string, number>> = {};
 
+      /** 직원별 N번 호출 대신 주 단위 1회 조회 (네트워크·서버 부하 대폭 감소) */
+      let allSchedules: any[] = [];
+      try {
+        const response = await scheduleAPI.getAll({
+          start_date: startDate,
+          end_date: endDate,
+        });
+        allSchedules = normalizeList<any>(response.data);
+      } catch (err) {
+        console.error('주간 스케줄 일괄 로딩 실패:', err);
+        allSchedules = [];
+      }
+
+      const byEmployeeId = new Map<number, any[]>();
+      allSchedules.forEach((schedule: any) => {
+        const eid = schedule.employee_id as number;
+        if (!byEmployeeId.has(eid)) byEmployeeId.set(eid, []);
+        byEmployeeId.get(eid)!.push(schedule);
+      });
+
       for (const employee of employeesToUse) {
         const isDaily = (employee as any).employment_type === 'DAILY';
-        try {
-          const response = await scheduleAPI.getAll({
-            employee_id: employee.id,
-            start_date: startDate,
-            end_date: endDate,
-          });
-          const schedules = normalizeList<any>(response.data);
+        const schedules = byEmployeeId.get(employee.id) ?? [];
 
-          const holidayDates = new Set<string>();
-          const empExtra: Record<string, number> = {};
-          schedules.forEach((schedule: any) => {
-            const raw = schedule.date ?? schedule.schedule_date ?? '';
-            const scheduleDate = typeof raw === 'string' ? raw.slice(0, 10) : raw;
-            if (scheduleDate && scheduleDate.length === 10) {
-              if (schedule.schedule_type === '휴무') {
-                holidayDates.add(scheduleDate);
-              }
-              empExtra[scheduleDate] = Number(schedule.extra_hours ?? 0);
+        const holidayDates = new Set<string>();
+        const empExtra: Record<string, number> = {};
+        schedules.forEach((schedule: any) => {
+          const raw = schedule.date ?? schedule.schedule_date ?? '';
+          const scheduleDate = typeof raw === 'string' ? raw.slice(0, 10) : raw;
+          if (scheduleDate && scheduleDate.length === 10) {
+            if (schedule.schedule_type === '휴무') {
+              holidayDates.add(scheduleDate);
             }
-          });
-          // 일당: 해당 주에 저장된 스케줄이 없으면 기본 전체 휴무(나오는 날만 근무로 토글)
-          if (isDaily && schedules.length === 0) {
-            allWeekDateStrs.forEach((ds) => holidayDates.add(ds));
+            empExtra[scheduleDate] = Number(schedule.extra_hours ?? 0);
           }
-          newSelections[employee.id] = holidayDates;
-          newExtraHours[employee.id] = empExtra;
-        } catch (err) {
-          console.error(`직원 ${employee.id}의 스케줄 로딩 실패:`, err);
-          newSelections[employee.id] = isDaily ? new Set(allWeekDateStrs) : new Set<string>();
-          newExtraHours[employee.id] = {};
+        });
+        if (isDaily && schedules.length === 0) {
+          allWeekDateStrs.forEach((ds) => holidayDates.add(ds));
         }
+        newSelections[employee.id] = holidayDates;
+        newExtraHours[employee.id] = empExtra;
       }
 
       setSelectedDays(newSelections);

@@ -132,6 +132,16 @@ def run(engine: Engine) -> None:
         except Exception:
             pass
 
+        # 스케줄: 지점+날짜 범위·월 조회 속도 (주간 일괄 로딩 등)
+        try:
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_erp_schedules_store_date ON erp_schedules (store_id, date)"
+                )
+            )
+        except Exception:
+            pass
+
         # 사용자 권한 모드 (조회전용 / 직원·식자재 한정)
         try:
             conn.execute(

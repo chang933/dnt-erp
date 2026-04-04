@@ -53,6 +53,9 @@ export interface Schedule {
   work_position?: '홀' | '주방';
   /** 시급/알바 해당일 추가 근무 시간(시간 단위) */
   extra_hours?: number;
+  /** GET /schedules/month/... 응답에만 포함 (직원 목록 추가 요청 생략용) */
+  employee_name?: string;
+  employee_position?: '홀' | '주방' | '대표' | '사장';
 }
 
 // 출퇴근 타입

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { scheduleAPI, employeeAPI } from '../api/client';
+import { scheduleAPI } from '../api/client';
 import { Schedule } from '../types';
 import { useWindowWidth } from '../hooks/useWindowWidth';
 
@@ -14,7 +14,6 @@ function normalizeList<T>(payload: any): T[] {
 const ScheduleCalendar: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [schedules, setSchedules] = useState<Schedule[]>([]);
-  const [employees, setEmployees] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [positionFilter, setPositionFilter] = useState<'전체' | '홀' | '주방'>('전체');
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
@@ -31,19 +30,12 @@ const ScheduleCalendar: React.FC = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      console.log('스케줄 데이터 로딩 시작...', year, month);
-      const [scheduleRes, employeeRes] = await Promise.all([
-        scheduleAPI.getByMonth(year, month),
-        employeeAPI.getAll({ limit: 100 }),
-      ]);
-      console.log('스케줄 데이터 로딩 완료');
+      const scheduleRes = await scheduleAPI.getByMonth(year, month);
       setSchedules(normalizeList<Schedule>(scheduleRes.data));
-      setEmployees(normalizeList<any>(employeeRes.data));
     } catch (err: any) {
       console.error('데이터 로딩 실패:', err);
       console.error('에러 상세:', err.response?.data || err.message);
       setSchedules([]);
-      setEmployees([]);
     } finally {
       setLoading(false);
     }
@@ -95,18 +87,12 @@ const ScheduleCalendar: React.FC = () => {
     return daySchedules;
   };
 
-  const getEmployeeName = (employeeId: number) => {
-    const employee = employees.find(e => e.id === employeeId);
-    return employee?.name || `직원 #${employeeId}`;
-  };
+  const getEmployeeName = (schedule: Schedule) =>
+    schedule.employee_name?.trim() || `직원 #${schedule.employee_id}`;
 
   const getEmployeePosition = (schedule: Schedule) => {
-    // 직원의 현재 employee_position을 우선 사용
-    const employee = employees.find(e => e.id === schedule.employee_id);
-    if (employee?.employee_position === '홀' || employee?.employee_position === '주방') {
-      return employee.employee_position;
-    }
-    // 직원 포지션이 없으면 스케줄의 work_position 사용
+    const pos = schedule.employee_position;
+    if (pos === '홀' || pos === '주방') return pos;
     if (schedule.work_position === '홀' || schedule.work_position === '주방') {
       return schedule.work_position;
     }
@@ -178,7 +164,7 @@ const ScheduleCalendar: React.FC = () => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
               {daySchedules.map((schedule) => {
                 const position = getEmployeePosition(schedule);
-                const name = getEmployeeName(schedule.employee_id);
+                const name = getEmployeeName(schedule);
                 const bgColor = position === '홀' ? '#d4edda' : position === '주방' ? '#cfe2ff' : '#f8f9fa';
                 const badgeColor = position === '홀' ? '#28a745' : position === '주방' ? '#0d6efd' : '#6c757d';
 
@@ -401,7 +387,7 @@ const ScheduleCalendar: React.FC = () => {
                                       whiteSpace: 'nowrap',
                                     }}
                                   >
-                                    {getEmployeeName(schedule.employee_id)}
+                                    {getEmployeeName(schedule)}
                                     {position && ` (${position})`}
                                   </div>
                                 );
