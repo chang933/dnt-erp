@@ -19,7 +19,6 @@ def create_store(db: Session, data: StoreCreate) -> Store:
     row = Store(name=data.name, code=data.code, is_active=data.is_active)
     db.add(row)
     db.commit()
-    db.refresh(row)
     return row
 
 
@@ -30,5 +29,4 @@ def update_store(db: Session, store_id: int, data: StoreUpdate) -> Optional[Stor
     for k, v in data.model_dump(exclude_unset=True).items():
         setattr(row, k, v)
     db.commit()
-    db.refresh(row)
     return row

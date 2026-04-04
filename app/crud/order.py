@@ -48,7 +48,6 @@ def create_order(db: Session, store_id: int, order: OrderCreate) -> Order:
         )
         db.add(db_item)
     db.commit()
-    db.refresh(db_order)
     return db_order
 
 
@@ -149,7 +148,6 @@ def update_order_item_status(
         if all(item.part_status.get(p) == "ready" for p in item.parts):
             item.status = "ready"
     db.commit()
-    db.refresh(item)
     return item
 
 
@@ -164,7 +162,6 @@ def update_order_item_part_status(
     if all(item.part_status.get(p) == "ready" for p in item.parts):
         item.status = "ready"
     db.commit()
-    db.refresh(item)
     return item
 
 

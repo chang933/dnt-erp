@@ -38,7 +38,6 @@ def create_ingredient(db: Session, store_id: int, ingredient: IngredientCreate) 
     )
     db.add(db_ingredient)
     db.commit()
-    db.refresh(db_ingredient)
     return db_ingredient
 
 
@@ -58,7 +57,6 @@ def update_ingredient(
         setattr(db_ingredient, field, value)
 
     db.commit()
-    db.refresh(db_ingredient)
     return db_ingredient
 
 

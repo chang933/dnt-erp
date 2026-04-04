@@ -79,7 +79,6 @@ def create_inventory_log(db: Session, store_id: int, log: InventoryLogCreate) ->
         ingredient.stock -= log.quantity
 
     db.commit()
-    db.refresh(db_log)
     return db_log
 
 

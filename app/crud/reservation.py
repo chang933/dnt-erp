@@ -48,7 +48,6 @@ def create_reservation(
     )
     db.add(db_reservation)
     db.commit()
-    db.refresh(db_reservation)
     return db_reservation
 
 
@@ -65,7 +64,6 @@ def update_reservation(
     for field, value in update_data.items():
         setattr(db_reservation, field, value)
     db.commit()
-    db.refresh(db_reservation)
     return db_reservation
 
 

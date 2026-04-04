@@ -95,7 +95,6 @@ def create_schedule(db: Session, store_id: int, schedule: ScheduleCreate) -> Sch
             if field != 'employee_id':  # employee_id는 변경하지 않음
                 setattr(existing, field, value)
         db.commit()
-        db.refresh(existing)
         return existing
 
     extra_hours = getattr(schedule, 'extra_hours', None)
@@ -114,7 +113,6 @@ def create_schedule(db: Session, store_id: int, schedule: ScheduleCreate) -> Sch
     )
     db.add(db_schedule)
     db.commit()
-    db.refresh(db_schedule)
     return db_schedule
 
 
@@ -134,7 +132,6 @@ def update_schedule(
         setattr(db_schedule, field, value)
     
     db.commit()
-    db.refresh(db_schedule)
     return db_schedule
 
 

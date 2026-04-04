@@ -151,3 +151,14 @@ def run(engine: Engine) -> None:
             )
         except Exception:
             pass
+
+        # 저장·목록 조회: 지점+날짜 복합 인덱스 (Supabase 왕복·Seq Scan 감소)
+        for idx_sql in (
+            "CREATE INDEX IF NOT EXISTS ix_erp_revenue_expense_store_date ON erp_revenue_expense (store_id, date)",
+            "CREATE INDEX IF NOT EXISTS ix_erp_food_costs_store_date ON erp_food_costs (store_id, date)",
+            "CREATE INDEX IF NOT EXISTS ix_erp_attendance_store_date ON erp_attendance (store_id, date)",
+        ):
+            try:
+                conn.execute(text(idx_sql))
+            except Exception:
+                pass

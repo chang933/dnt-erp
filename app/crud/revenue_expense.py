@@ -60,7 +60,6 @@ def create_revenue_expense(
     )
     db.add(db_revenue_expense)
     db.commit()
-    db.refresh(db_revenue_expense)
     return db_revenue_expense
 
 
@@ -82,7 +81,6 @@ def update_revenue_expense(
         setattr(db_revenue_expense, field, value)
 
     db.commit()
-    db.refresh(db_revenue_expense)
     return db_revenue_expense
 
 

@@ -108,7 +108,6 @@ def create_attendance(
             if field != "employee_id":
                 setattr(existing, field, value)
         db.commit()
-        db.refresh(existing)
         return existing
 
     db_attendance = Attendance(
@@ -122,7 +121,6 @@ def create_attendance(
     )
     db.add(db_attendance)
     db.commit()
-    db.refresh(db_attendance)
     return db_attendance
 
 
@@ -142,7 +140,6 @@ def update_attendance(
         setattr(db_attendance, field, value)
 
     db.commit()
-    db.refresh(db_attendance)
     return db_attendance
 
 

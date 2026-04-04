@@ -51,7 +51,6 @@ def create_customer(db: Session, store_id: int, customer: CustomerCreate) -> Cus
     )
     db.add(db_customer)
     db.commit()
-    db.refresh(db_customer)
     return db_customer
 
 
@@ -75,7 +74,6 @@ def update_customer(
         setattr(db_customer, field, value)
 
     db.commit()
-    db.refresh(db_customer)
     return db_customer
 
 

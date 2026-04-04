@@ -80,7 +80,6 @@ def create_payroll(db: Session, store_id: int, payroll: PayrollCreate) -> Payrol
         existing.employer_deductions = payroll.employer_deductions or Decimal("0")
         existing.net_pay = payroll.net_pay
         db.commit()
-        db.refresh(existing)
         return existing
 
     db_payroll = Payroll(
@@ -98,7 +97,6 @@ def create_payroll(db: Session, store_id: int, payroll: PayrollCreate) -> Payrol
     )
     db.add(db_payroll)
     db.commit()
-    db.refresh(db_payroll)
     return db_payroll
 
 
@@ -115,7 +113,6 @@ def update_payroll(
         setattr(db_payroll, field, value)
 
     db.commit()
-    db.refresh(db_payroll)
     return db_payroll
 
 

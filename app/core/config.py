@@ -5,6 +5,10 @@ class Settings(BaseSettings):
     # .env 파일에 DATABASE_URL을 설정하거나, 여기에 직접 입력하세요
     # 형식: postgresql+psycopg2://postgres:[PASSWORD]@db.hetmepmsejcdwcxysezk.supabase.co:5432/postgres
     database_url: str = "postgresql+psycopg2://postgres:[PASSWORD]@db.[PROJECT].supabase.co:5432/postgres"
+    # Supabase Pooler(6543) 사용 시 워커당 연결 수 (기본 1은 대기 큐로 저장이 느려질 수 있음)
+    database_pool_size: int = 5
+    database_max_overflow: int = 10
+    database_pool_recycle: int = 280
     
     # Security (운영에서는 SECRET_KEY를 강한 랜덤 문자열로 설정)
     secret_key: str = "dnt-erp-secret-key-change-in-production"

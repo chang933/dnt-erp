@@ -39,9 +39,9 @@ def get_food_cost(db: Session, store_id: int, food_cost_id: int) -> Optional[Foo
 def create_food_cost(db: Session, store_id: int, food_cost: FoodCostCreate) -> FoodCost:
     db_obj = FoodCost(store_id=store_id, **food_cost.model_dump())
     db.add(db_obj)
+    db.flush()
+    kitchen_expense_sync.apply_kitchen_sync_for_date_no_commit(db, store_id, db_obj.date)
     db.commit()
-    db.refresh(db_obj)
-    kitchen_expense_sync.sync_kitchen_expense_for_date(db, store_id, db_obj.date)
     return db_obj
 
 
@@ -54,9 +54,9 @@ def update_food_cost(
     for field, value in update.model_dump(exclude_unset=True).items():
         setattr(db_obj, field, value)
     synced_date = db_obj.date
+    db.flush()
+    kitchen_expense_sync.apply_kitchen_sync_for_date_no_commit(db, store_id, synced_date)
     db.commit()
-    db.refresh(db_obj)
-    kitchen_expense_sync.sync_kitchen_expense_for_date(db, store_id, synced_date)
     return db_obj
 
 
@@ -66,6 +66,7 @@ def delete_food_cost(db: Session, store_id: int, food_cost_id: int) -> bool:
         return False
     synced_date = db_obj.date
     db.delete(db_obj)
+    db.flush()
+    kitchen_expense_sync.apply_kitchen_sync_for_date_no_commit(db, store_id, synced_date)
     db.commit()
-    kitchen_expense_sync.sync_kitchen_expense_for_date(db, store_id, synced_date)
     return True

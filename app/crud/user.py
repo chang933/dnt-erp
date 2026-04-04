@@ -39,5 +39,4 @@ def create_user(
     )
     db.add(row)
     db.commit()
-    db.refresh(row)
     return row

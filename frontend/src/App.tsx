@@ -126,25 +126,40 @@ function StaffPageGuard() {
   return <Navigate to="/" replace />;
 }
 
+type StoreBranchNavProps = {
+  stores: StoreOut[];
+  selectedId: number;
+  onChange: (id: number) => void;
+  loading: boolean;
+};
+
 function Navigation({
   isMobile,
   navOpen,
   onClose,
+  storeBranch,
 }: {
   isMobile: boolean;
   navOpen: boolean;
   onClose: () => void;
+  storeBranch?: StoreBranchNavProps;
 }) {
   const location = useLocation();
   const { user } = useAuth();
   const groups = navGroupsForUser(user);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const [storePickerOpen, setStorePickerOpen] = useState(false);
   const navRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     setOpenGroup(null);
+    setStorePickerOpen(false);
     if (isMobile) onClose();
   }, [location.pathname, isMobile, onClose]);
+
+  useEffect(() => {
+    if (!navOpen) setStorePickerOpen(false);
+  }, [navOpen]);
 
   useEffect(() => {
     if (isMobile) return;
@@ -181,6 +196,49 @@ function Navigation({
           </div>
         )}
         <ul className="nav-groups">
+          {isMobile && storeBranch && (
+            <li
+              className={`nav-group nav-group-store${storePickerOpen ? ' open' : ''}`}
+            >
+              <button
+                type="button"
+                className="nav-group-label"
+                onClick={() => setStorePickerOpen((v) => !v)}
+              >
+                <span>지점 바꾸기</span>
+                <span className="nav-chevron">{storePickerOpen ? '▲' : '▼'}</span>
+              </button>
+              <ul className="nav-dropdown nav-dropdown-store">
+                <li className="nav-store-picker-cell">
+                  {storeBranch.loading ? (
+                    <span className="nav-store-loading">지점 불러오는 중…</span>
+                  ) : storeBranch.stores.length === 0 ? (
+                    <span className="nav-store-loading">지점 목록이 없습니다.</span>
+                  ) : (
+                    <>
+                      <label className="nav-store-select-label" htmlFor="nav-store-select">
+                        운영 지점
+                      </label>
+                      <select
+                        id="nav-store-select"
+                        className="nav-store-select"
+                        value={storeBranch.selectedId}
+                        onChange={(e) => storeBranch.onChange(Number(e.target.value))}
+                        aria-label="운영 지점 선택"
+                      >
+                        {storeBranch.stores.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.code ? `${s.name} (${s.code})` : s.name}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="nav-store-hint">변경 시 페이지가 새로고침됩니다.</p>
+                    </>
+                  )}
+                </li>
+              </ul>
+            </li>
+          )}
           {groups.map((group) => {
             const items = group.items.filter((item) => !item.adminOnly || user?.is_admin);
             if (items.length === 0) return null;
@@ -217,13 +275,12 @@ function Navigation({
   );
 }
 
-function StoreBranchSelect({
-  onStoreResolved,
-}: {
-  onStoreResolved?: (info: { id: number; name: string } | null) => void;
-}) {
+function useStoreBranchState(
+  onStoreResolved?: (info: { id: number; name: string } | null) => void,
+) {
   const [stores, setStores] = useState<StoreOut[]>([]);
-  const [selected, setSelected] = useState(() => getSelectedStoreId());
+  const [selectedId, setSelectedId] = useState(() => getSelectedStoreId());
+  const [fetchDone, setFetchDone] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -238,41 +295,63 @@ function StoreBranchSelect({
           id = list[0].id;
           setSelectedStoreId(id);
         }
-        setSelected(id);
+        setSelectedId(id);
         const row = list.find((s) => s.id === id);
         onStoreResolved?.(row ? { id: row.id, name: row.name } : null);
       })
       .catch(() => {
         if (!cancelled) onStoreResolved?.(null);
+      })
+      .finally(() => {
+        if (!cancelled) setFetchDone(true);
       });
     return () => {
       cancelled = true;
     };
   }, [onStoreResolved]);
 
-  const onChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const id = Number(e.target.value);
+  const changeStore = useCallback((id: number) => {
     if (!Number.isFinite(id)) return;
     setSelectedStoreId(id);
-    setSelected(id);
+    setSelectedId(id);
     window.location.reload();
-  };
+  }, []);
 
-  if (stores.length === 0) {
+  return {
+    stores,
+    selectedId,
+    changeStore,
+    storesLoading: !fetchDone,
+  };
+}
+
+function StoreBranchDesktopSelect({
+  stores,
+  selectedId,
+  onChange,
+  loading,
+}: {
+  stores: StoreOut[];
+  selectedId: number;
+  onChange: (id: number) => void;
+  loading: boolean;
+}) {
+  if (loading && stores.length === 0) {
     return (
       <span className="store-branch-label-text" style={{ opacity: 0.75, fontSize: '0.75rem' }}>
         지점 로딩…
       </span>
     );
   }
+  if (stores.length === 0) return null;
 
   return (
     <label className="store-branch-label">
       <span className="store-branch-label-text">지점</span>
       <select
         className="store-branch-select"
-        value={selected}
-        onChange={onChange}
+        value={selectedId}
+        onChange={(e) => onChange(Number(e.target.value))}
         aria-label="운영 지점 선택"
       >
         {stores.map((s) => (
@@ -319,6 +398,8 @@ function AppShell() {
     setBranchSubtitle(info?.name ?? null);
   }, []);
 
+  const storeBranch = useStoreBranchState(onStoreResolved);
+
   useEffect(() => {
     if (!isMobile) setNavOpen(false);
   }, [isMobile]);
@@ -339,14 +420,39 @@ function AppShell() {
               />
             </Link>
             <div className="header-text">
-              <h1>도원반점</h1>
-              <p className="app-subtitle">
-                {branchSubtitle ? `${branchSubtitle} · 식당 관리 시스템` : '식당 관리 시스템'}
-              </p>
+              {isMobile ? (
+                <h1 className="header-title-mobile">
+                  <span className="header-title-brand">도원반점</span>
+                  {branchSubtitle ? (
+                    <>
+                      <span className="header-title-sep" aria-hidden="true">
+                        ·
+                      </span>
+                      <span className="header-branch-name">{branchSubtitle}</span>
+                    </>
+                  ) : storeBranch.storesLoading ? (
+                    <span className="header-branch-loading">· …</span>
+                  ) : null}
+                </h1>
+              ) : (
+                <>
+                  <h1>도원반점</h1>
+                  <p className="app-subtitle">
+                    {branchSubtitle ? `${branchSubtitle} · 식당 관리 시스템` : '식당 관리 시스템'}
+                  </p>
+                </>
+              )}
             </div>
           </div>
           <div className="header-actions">
-            <StoreBranchSelect onStoreResolved={onStoreResolved} />
+            {!isMobile && (
+              <StoreBranchDesktopSelect
+                stores={storeBranch.stores}
+                selectedId={storeBranch.selectedId}
+                onChange={storeBranch.changeStore}
+                loading={storeBranch.storesLoading}
+              />
+            )}
             <HeaderUserMenu />
             {isMobile && (
               <button
@@ -378,7 +484,21 @@ function AppShell() {
           조회 전용 계정입니다. 저장·수정·삭제·등록은 할 수 없습니다.
         </div>
       )}
-      <Navigation isMobile={isMobile} navOpen={navOpen} onClose={closeNav} />
+      <Navigation
+        isMobile={isMobile}
+        navOpen={navOpen}
+        onClose={closeNav}
+        storeBranch={
+          isMobile
+            ? {
+                stores: storeBranch.stores,
+                selectedId: storeBranch.selectedId,
+                onChange: storeBranch.changeStore,
+                loading: storeBranch.storesLoading,
+              }
+            : undefined
+        }
+      />
       <main className="app-main">
         <Outlet />
       </main>

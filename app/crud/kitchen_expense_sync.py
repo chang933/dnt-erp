@@ -41,6 +41,13 @@ def _apply_kitchen_sync_for_date(db: Session, store_id: int, target_date: date) 
         )
 
 
+def apply_kitchen_sync_for_date_no_commit(
+    db: Session, store_id: int, target_date: date
+) -> None:
+    """주방지출(식자재 자동)만 반영. commit은 호출자가 한 번만 수행 (저장 지연·이중 왕복 방지)."""
+    _apply_kitchen_sync_for_date(db, store_id, target_date)
+
+
 def sync_kitchen_expense_for_date(db: Session, store_id: int, target_date: date) -> None:
     _apply_kitchen_sync_for_date(db, store_id, target_date)
     db.commit()

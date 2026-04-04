@@ -59,15 +59,13 @@ def create_employee(
         status=EmployeeStatus.ACTIVE
     )
     db.add(db_employee)
-    db.commit()
-    db.refresh(db_employee)
-    # 주민번호를 raw UPDATE로 한 번 더 반영 (저장 누락 방지)
+    db.flush()
+    # 주민번호를 raw UPDATE로 한 번 더 반영 (저장 누락 방지) — 트랜잭션 1회로 마무리
     db.execute(
         text("UPDATE erp_employees SET ssn = :ssn WHERE id = :id"),
-        {"ssn": ssn_val, "id": db_employee.id}
+        {"ssn": ssn_val, "id": db_employee.id},
     )
     db.commit()
-    db.refresh(db_employee)
     return db_employee
 
 
@@ -91,16 +89,14 @@ def update_employee(
     for field, value in update_data.items():
         if hasattr(db_employee, field):
             setattr(db_employee, field, value)
-    
-    db.commit()
-    db.refresh(db_employee)
+
+    db.flush()
     if "ssn" in update_data:
         db.execute(
             text("UPDATE erp_employees SET ssn = :ssn WHERE id = :id"),
-            {"ssn": update_data["ssn"], "id": employee_id}
+            {"ssn": update_data["ssn"], "id": employee_id},
         )
-        db.commit()
-        db.refresh(db_employee)
+    db.commit()
     return db_employee
 
 

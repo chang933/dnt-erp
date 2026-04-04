@@ -81,7 +81,6 @@ def create_document(db: Session, store_id: int, document: DocumentCreate) -> Doc
     )
     db.add(db_document)
     db.commit()
-    db.refresh(db_document)
     return db_document
 
 
@@ -98,7 +97,6 @@ def update_document(
         setattr(db_document, field, value)
 
     db.commit()
-    db.refresh(db_document)
     return db_document
 
 

@@ -67,7 +67,6 @@ def create_visit(db: Session, store_id: int, visit: VisitCreate) -> Visit:
     )
     db.add(db_visit)
     db.commit()
-    db.refresh(db_visit)
     return db_visit
 
 
