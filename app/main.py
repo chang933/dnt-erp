@@ -5,7 +5,10 @@ from fastapi.responses import ORJSONResponse, JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
 from app.core.config import settings
+import logging
 import os
+
+_startup_log = logging.getLogger("uvicorn.error")
 
 # 모델들을 import하여 Base.metadata에 등록
 from app.models import (
@@ -231,15 +234,22 @@ def _assert_not_supabase_session_pooler() -> None:
 @app.on_event("startup")
 def on_startup():
     """앱 시작 시 존재하지 않는 테이블 자동 생성"""
-    _assert_not_supabase_session_pooler()
-    from app.db.base import Base
-    from app.db.session import engine
-    from app.db import multi_store_migrate
-    Base.metadata.create_all(bind=engine)
-    multi_store_migrate.run(engine)
-    _seed_bootstrap_admin()
-    _ensure_dev_dowon_user()
-    _seed_fixed_role_accounts()
+    try:
+        _assert_not_supabase_session_pooler()
+        from app.db.base import Base
+        from app.db.session import engine
+        from app.db import multi_store_migrate
+
+        Base.metadata.create_all(bind=engine)
+        multi_store_migrate.run(engine)
+        _seed_bootstrap_admin()
+        _ensure_dev_dowon_user()
+        _seed_fixed_role_accounts()
+    except Exception:
+        _startup_log.exception(
+            "Application startup failed (DB URL·Transaction 풀 6543·비밀번호·Render Logs 전체 확인)"
+        )
+        raise
 
 
 @app.get("/")

@@ -1,4 +1,6 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
 
 class Settings(BaseSettings):
     # Database - yamasyeo 프로젝트 사용
@@ -19,12 +21,24 @@ class Settings(BaseSettings):
 
     # Environment
     environment: str = "development"
-    
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def strip_database_url_quotes(cls, v):
+        """Render 등에서 값을 따옴표까지 붙여 넣으면 연결 실패하는 경우 방지."""
+        if not isinstance(v, str):
+            return v
+        s = v.strip()
+        if len(s) >= 2 and s[0] == s[-1] and s[0] in "\"'":
+            s = s[1:-1].strip()
+        return s
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         extra="allow",
     )
+
 
 settings = Settings()
 
