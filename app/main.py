@@ -208,6 +208,22 @@ def _ensure_dev_dowon_user() -> None:
         db.close()
 
 
+def _startup_abort_on_db_error() -> bool:
+    """
+    True면 startup DB 예외 시 프로세스 종료(배포 실패).
+    - 로컬: 기본 True (문제를 바로 드러냄)
+    - Render: 기본 False (배포 통과 → Logs·/health 로 DATABASE_URL 수정 유도)
+    - DB_STARTUP_STRICT=1 이면 어디서든 종료, DB_STARTUP_FAIL_OK=1 이면 어디서든 살림
+    """
+    if os.getenv("DB_STARTUP_FAIL_OK", "").lower() in ("1", "true", "yes"):
+        return False
+    if os.getenv("DB_STARTUP_STRICT", "").lower() in ("1", "true", "yes"):
+        return True
+    render = os.getenv("RENDER", "").lower()
+    on_render = render in ("true", "1", "yes")
+    return not on_render
+
+
 def _assert_not_supabase_session_pooler() -> None:
     """
     Supabase Session 풀러(호스트 *.pooler.supabase.com, 포트 5432)는 동시 연결이 매우 적어
@@ -234,6 +250,7 @@ def _assert_not_supabase_session_pooler() -> None:
 @app.on_event("startup")
 def on_startup():
     """앱 시작 시 존재하지 않는 테이블 자동 생성"""
+    app.state.database_ready = False
     try:
         _assert_not_supabase_session_pooler()
         from app.db.base import Base
@@ -245,11 +262,17 @@ def on_startup():
         _seed_bootstrap_admin()
         _ensure_dev_dowon_user()
         _seed_fixed_role_accounts()
+        app.state.database_ready = True
     except Exception:
         _startup_log.exception(
             "Application startup failed (DB URL·Transaction 풀 6543·비밀번호·Render Logs 전체 확인)"
         )
-        raise
+        if _startup_abort_on_db_error():
+            raise
+        _startup_log.error(
+            "Render 등 비엄격 모드: 프로세스는 유지됩니다. DATABASE_URL 수정 후 재배포하거나 "
+            "DB_STARTUP_STRICT=1 로 기동 진단하세요."
+        )
 
 
 @app.get("/")
@@ -263,9 +286,18 @@ def read_root():
     }
 
 @app.get("/health")
-def health_check():
-    """Health check endpoint"""
-    return {"status": "ok"}
+def health_check(request: Request):
+    """Health check endpoint (Render는 200만 보면 배포 성공 처리)"""
+    body: dict = {"status": "ok"}
+    ready = getattr(request.app.state, "database_ready", None)
+    if ready is False:
+        body["database_ready"] = False
+        body["hint"] = (
+            "DB 기동 단계 실패. Render Logs의 Traceback·DATABASE_URL(Transaction pooler :6543) 확인."
+        )
+    elif ready is True:
+        body["database_ready"] = True
+    return body
 
 
 @app.get("/health/db")

@@ -16,6 +16,7 @@ services:
         value: production
       # Supabase: Session 풀러(:5432)는 MaxClientsInSessionMode에 걸리기 쉬움. Transaction 풀(:6543) URL 사용.
       # DATABASE_URL 값에 따옴표를 넣지 말 것. 비밀번호에 @ 등 특수문자면 URL 인코딩 필요.
+      # DB 기동 실패 시에도 배포를 통과시키려면(기본: Render에서 자동) 코드가 프로세스를 유지함. 강제 실패는 DB_STARTUP_STRICT=1
       - key: DATABASE_URL
         sync: false
       - key: SECRET_KEY
