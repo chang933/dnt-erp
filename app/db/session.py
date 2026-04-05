@@ -6,6 +6,9 @@ from app.core.config import settings
 
 # Supabase: 5432(Session 모드)는 동시 연결 수가 매우 적어 MaxClients 오류가 잘 남.
 # 풀러 **6543(Transaction 모드)** 권장. https://supabase.com/docs/guides/database/connecting-to-postgres
+#
+# Render 등 일부 클라우드는 db.PROJECT.supabase.co:6543 가 IPv6만 반환해 "Network is unreachable" 가 날 수 있음.
+# 이때는 호스트를 aws-0-REGION.pooler.supabase.com:6543 로 두고, 사용자명을 postgres.PROJECTREF 형식으로 쓴다.
 _url = settings.database_url.lower()
 _connect_args = {}
 if "sslmode=" not in _url:
