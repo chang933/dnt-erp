@@ -14,6 +14,7 @@ services:
         value: "3.11.6"
       - key: ENVIRONMENT
         value: production
+      # Supabase: Session 풀러(:5432)는 MaxClientsInSessionMode에 걸리기 쉬움. Transaction 풀(:6543) URL 사용.
       - key: DATABASE_URL
         sync: false
       - key: SECRET_KEY

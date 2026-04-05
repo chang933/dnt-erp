@@ -205,9 +205,33 @@ def _ensure_dev_dowon_user() -> None:
         db.close()
 
 
+def _assert_not_supabase_session_pooler() -> None:
+    """
+    Supabase Session 풀러(호스트 *.pooler.supabase.com, 포트 5432)는 동시 연결이 매우 적어
+    MaxClientsInSessionMode로 기동이 실패한다. Transaction 풀(6543) URL을 쓰도록 강제 안내.
+    """
+    from sqlalchemy.engine.url import make_url
+
+    try:
+        u = make_url(settings.database_url)
+    except Exception:
+        return
+    host = (u.host or "").lower()
+    port = u.port or 5432
+    if "pooler.supabase.com" in host and port == 5432:
+        raise RuntimeError(
+            "DATABASE_URL이 Supabase Session 풀러(포트 5432)입니다. "
+            "연결 한도 초과(MaxClientsInSessionMode)로 실패합니다. "
+            "Supabase Dashboard → Project Settings → Database → Connection string → "
+            "Transaction 모드(포트 6543)를 복사해 Render의 DATABASE_URL을 교체하세요. "
+            "호스트는 같고 포트만 5432 → 6543으로 바꾸면 됩니다."
+        )
+
+
 @app.on_event("startup")
 def on_startup():
     """앱 시작 시 존재하지 않는 테이블 자동 생성"""
+    _assert_not_supabase_session_pooler()
     from app.db.base import Base
     from app.db.session import engine
     from app.db import multi_store_migrate
